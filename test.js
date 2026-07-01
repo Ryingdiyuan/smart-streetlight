@@ -1,3 +1,0 @@
-//adafaf
-
-print('hello world');
