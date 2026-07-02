@@ -14,6 +14,12 @@ engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
+def init_db() -> None:
+    from app.models import device  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:

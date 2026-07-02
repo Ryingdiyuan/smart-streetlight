@@ -9,7 +9,7 @@ from app.core.database import Base
 class Device(Base):
     __tablename__ = "devices"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
     device_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     device_name: Mapped[str] = mapped_column(String(100))
     location: Mapped[str | None] = mapped_column(String(255), default=None)
