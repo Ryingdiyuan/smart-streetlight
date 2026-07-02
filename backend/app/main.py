@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import init_db
 from app.mqtt.client import mqtt_client
 from app.routers import api_router
 from app.tasks.scheduler import scheduler
@@ -11,6 +12,7 @@ from app.tasks.scheduler import scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     if settings.mqtt_enabled:
         mqtt_client.start()
     if settings.scheduler_enabled:
