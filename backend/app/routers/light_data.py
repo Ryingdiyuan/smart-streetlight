@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.device import Device
 from app.models.light_data import LightData
-from app.schemas.light_data import LightDataCreate, LightDataRead
+from app.schemas.light_data import LightDataCreate, LightDataRead, LightDataWithAction
+from app.services.auto_control import evaluate_auto_control
 
 router = APIRouter(prefix="/devices/{device_id}", tags=["light-data"])
 
@@ -21,14 +22,14 @@ def ensure_device_exists(db: Session, device_id: int) -> None:
 
 @router.post(
     "/light-data",
-    response_model=LightDataRead,
+    response_model=LightDataWithAction,
     status_code=status.HTTP_201_CREATED,
 )
 def create_light_data(
     device_id: int,
     light_data_create: LightDataCreate,
     db: Session = Depends(get_db),
-) -> LightData:
+) -> dict:
     ensure_device_exists(db, device_id)
 
     light_data = LightData(
@@ -41,7 +42,22 @@ def create_light_data(
     db.add(light_data)
     db.commit()
     db.refresh(light_data)
-    return light_data
+
+    suggested_action = evaluate_auto_control(
+        db,
+        device_id,
+        light_data.light_intensity,
+    )
+    return {
+        "id": light_data.id,
+        "device_id": light_data.device_id,
+        "light_intensity": light_data.light_intensity,
+        "lamp_status": light_data.lamp_status,
+        "voltage": light_data.voltage,
+        "reported_at": light_data.reported_at,
+        "created_at": light_data.created_at,
+        "suggested_action": suggested_action,
+    }
 
 
 @router.get("/latest-light", response_model=LightDataRead)

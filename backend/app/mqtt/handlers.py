@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.device import Device
 from app.models.light_data import LightData
+from app.services.auto_control import evaluate_auto_control
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,18 @@ def handle_telemetry_payload(payload: dict[str, Any], db: Session) -> None:
     )
     db.add(light_data)
     db.commit()
-    logger.info("Saved MQTT telemetry for device %s", device_code)
+    db.refresh(light_data)
+
+    suggested_action = evaluate_auto_control(
+        db,
+        device.id,
+        light_data.light_intensity,
+    )
+    logger.info(
+        "Saved MQTT telemetry for device %s, suggested_action=%s",
+        device_code,
+        suggested_action,
+    )
 
 
 def handle_telemetry_message(topic: str, payload_bytes: bytes) -> None:
