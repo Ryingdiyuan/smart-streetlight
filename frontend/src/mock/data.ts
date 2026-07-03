@@ -5,6 +5,8 @@ import type {
   DashboardOverview,
   Device,
   DeviceDetail,
+  LightHistoryPoint,
+  RealtimeLightReading,
 } from "@/types/models";
 
 export const mockDevices: Device[] = [
@@ -202,3 +204,74 @@ export const mockAgentMessages: AgentMessage[] = [
     content: "建议先检查设备供电、网络连接、MQTT 心跳上报以及现场传感器状态。",
   },
 ];
+
+/** 生成指定天数内每 10 分钟一条的光照采样数据 */
+function generateLightHistory(
+  baseIntensity: number,
+  days: number,
+  startDate: string,
+): LightHistoryPoint[] {
+  const points: LightHistoryPoint[] = [];
+  const start = new Date(startDate);
+  const now = new Date();
+  const msPerPoint = 10 * 60 * 1000; // 10 minutes
+
+  // 模拟一天的光照曲线：白天高，夜晚低
+  const getIntensity = (h: number, m: number): number => {
+    // 6:00-18:00 为白天，光照较强；夜晚较弱
+    const hour = h + m / 60;
+    if (hour >= 6 && hour <= 18) {
+      // 正弦曲线模拟日照
+      const peak = 0.5 + 0.5 * Math.sin(((hour - 6) / 12) * Math.PI);
+      return Math.round(baseIntensity * peak * (0.85 + Math.random() * 0.3));
+    }
+    // 夜晚微弱光照（路灯补光）
+    return Math.round((20 + Math.random() * 40) * (baseIntensity / 100));
+  };
+
+  const totalPoints = days * 24 * 6; // 6 points per hour
+  for (let i = 0; i < totalPoints; i++) {
+    const t = new Date(start.getTime() + i * msPerPoint);
+    if (t > now) break;
+    const h = t.getHours();
+    const m = t.getMinutes();
+    const intensity = getIntensity(h, m);
+    const isNight = h < 6 || h >= 18;
+    points.push({
+      timestamp: `${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      lightIntensity: intensity,
+      lampStatus: isNight ? "ON" : "OFF",
+    });
+  }
+  return points;
+}
+
+/** 预生成 7 天历史数据 */
+const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+const startStr = sevenDaysAgo.toISOString().slice(0, 16).replace("T", " ");
+
+export const mockLightHistory: Record<number, LightHistoryPoint[]> = {
+  1: generateLightHistory(280, 7, startStr),
+  2: generateLightHistory(320, 7, startStr),
+  3: generateLightHistory(180, 7, startStr),
+};
+
+/** 实时光照监测读数快照 */
+export function generateRealtimeReadings(): RealtimeLightReading[] {
+  return mockDevices.map((d) => {
+    const detail = mockDeviceDetails[d.id];
+    const base = detail?.currentLightIntensity ?? 100;
+    // 模拟实时波动
+    const variance = Math.round((Math.random() - 0.5) * 30);
+    return {
+      deviceId: d.id,
+      deviceCode: d.deviceCode,
+      deviceName: d.deviceName,
+      location: d.location,
+      status: d.status,
+      lampStatus: d.lampStatus,
+      lightIntensity: Math.max(0, base + variance),
+      updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    };
+  });
+}
