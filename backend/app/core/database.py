@@ -15,7 +15,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def init_db() -> None:
-    from app.models import device  # noqa: F401
+    from app.models import device, light_data  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 
