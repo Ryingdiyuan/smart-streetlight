@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import paho.mqtt.client as mqtt
 
@@ -13,7 +14,9 @@ class MqttClient:
     def __init__(self) -> None:
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, settings.mqtt_client_id)
         self._client.on_connect = self._on_connect
+        self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
+        self._connected = False
         if settings.mqtt_username:
             self._client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
 
@@ -30,16 +33,44 @@ class MqttClient:
         self._client.loop_stop()
         self._client.disconnect()
 
+    def publish(self, topic: str, payload: str | bytes) -> bool:
+        if not settings.mqtt_enabled:
+            logger.info("MQTT disabled, skip publish topic=%s", topic)
+            return False
+        if not self._connected:
+            logger.warning("MQTT not connected, publish failed topic=%s", topic)
+            return False
+
+        try:
+            result = self._client.publish(topic, payload)
+            return result.rc == mqtt.MQTT_ERR_SUCCESS
+        except Exception:
+            logger.exception("Failed to publish MQTT message topic=%s", topic)
+            return False
+
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         is_failure = getattr(reason_code, "is_failure", False)
         if callable(is_failure):
             is_failure = is_failure()
         if is_failure:
             logger.error("MQTT connection failed: %s", reason_code)
+            self._connected = False
             return
 
+        self._connected = True
         logger.info("MQTT connected, subscribing %s", TELEMETRY_TOPIC)
         client.subscribe(TELEMETRY_TOPIC)
+
+    def _on_disconnect(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        disconnect_flags: Any,
+        reason_code: Any,
+        properties: Any,
+    ) -> None:
+        self._connected = False
+        logger.info("MQTT disconnected: %s", reason_code)
 
     def _on_message(self, client, userdata, message) -> None:
         if message.topic.endswith("/telemetry"):
