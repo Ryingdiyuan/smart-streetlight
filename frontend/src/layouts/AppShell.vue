@@ -48,6 +48,8 @@ const route = useRoute();
 const navItems = [
   { to: "/", label: "总览大屏", description: "实时概览与图表入口" },
   { to: "/devices", label: "设备列表", description: "设备管理与详情跳转" },
+  { to: "/realtime-light", label: "实时光照监测", description: "传感器实时数据" },
+  { to: "/light-history", label: "历史光照数据", description: "光照趋势与统计" },
   { to: "/alarms", label: "告警日志", description: "离线和异常告警记录" },
   { to: "/agent", label: "智能问答", description: "维护建议与故障排查" },
 ];

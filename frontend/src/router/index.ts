@@ -6,7 +6,9 @@ import AlarmPage from "@/pages/AlarmPage.vue";
 import DashboardPage from "@/pages/DashboardPage.vue";
 import DeviceDetailPage from "@/pages/DeviceDetailPage.vue";
 import DeviceListPage from "@/pages/DeviceListPage.vue";
+import LightHistoryPage from "@/pages/LightHistoryPage.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
+import RealtimeLightPage from "@/pages/RealtimeLightPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -44,6 +46,18 @@ const router = createRouter({
           name: "agent",
           component: AgentPage,
           meta: { title: "智能问答" },
+        },
+        {
+          path: "realtime-light",
+          name: "realtime-light",
+          component: RealtimeLightPage,
+          meta: { title: "实时光照监测" },
+        },
+        {
+          path: "light-history",
+          name: "light-history",
+          component: LightHistoryPage,
+          meta: { title: "历史光照数据" },
         },
       ],
     },

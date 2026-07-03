@@ -80,3 +80,14 @@ export interface AgentPromptOption {
   id: string;
   title: string;
 }
+
+export interface RealtimeLightReading {
+  deviceId: number;
+  deviceCode: string;
+  deviceName: string;
+  location: string;
+  status: DeviceStatus;
+  lampStatus: LampStatus;
+  lightIntensity: number;
+  updatedAt: string;
+}
