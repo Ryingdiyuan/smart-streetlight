@@ -1,24 +1,48 @@
 # MQTT 主题设计
 
-## 主题命名原则
+## 当前阶段
 
-MQTT 主题围绕单个设备展开，统一使用设备编码作为路径参数。主题保持简洁，便于 mock 设备和真实硬件复用。
+Day 5 已接入 MQTT telemetry 数据：
+
+- 后端在 `MQTT_ENABLED=true` 时连接 MQTT Broker。
+- 后端订阅 `streetlight/+/telemetry`。
+- 收到合法设备遥测数据后写入 MySQL 的 `light_data` 表。
+- `MQTT_ENABLED=false` 时不启动 MQTT，不影响 HTTP 接口测试。
+
+## 配置项
+
+MQTT 配置通过 `backend/.env` 读取，不写死在业务代码中。
+
+```env
+MQTT_ENABLED=false
+MQTT_HOST=127.0.0.1
+MQTT_PORT=1883
+MQTT_USERNAME=
+MQTT_PASSWORD=
+MQTT_CLIENT_ID=smart-streetlight-backend
+```
+
+本地联调 MQTT 时，将 `MQTT_ENABLED` 改为 `true`，并确保本地 MQTT Broker 已启动。
+
+## 主题命名
 
 ```text
 streetlight/{deviceId}/{messageType}
 ```
 
+`deviceId` 使用设备编码，对应 `devices.device_code`，例如 `SL-001`。
+
 ## Topic 列表
 
-| Topic | 方向 | 说明 |
-| --- | --- | --- |
-| `streetlight/{deviceId}/telemetry` | 设备 -> 后端 | 上报光照、路灯状态、电压等遥测数据 |
-| `streetlight/{deviceId}/status` | 设备 -> 后端 | 上报在线状态、心跳、最后执行状态 |
-| `streetlight/{deviceId}/command` | 后端 -> 设备 | 下发开灯、关灯、亮度调节等控制指令 |
-| `streetlight/{deviceId}/command/reply` | 设备 -> 后端 | 返回控制指令执行结果 |
-| `streetlight/{deviceId}/alarm` | 设备 -> 后端 | 设备主动上报告警 |
+| Topic | 方向 | 当前状态 | 说明 |
+| --- | --- | --- | --- |
+| `streetlight/{deviceId}/telemetry` | 设备 -> 后端 | Day 5 已实现订阅 | 上报光照、路灯状态、电压等遥测数据 |
+| `streetlight/{deviceId}/status` | 设备 -> 后端 | 后续实现 | 上报在线状态、心跳、最后执行状态 |
+| `streetlight/{deviceId}/command` | 后端 -> 设备 | 后续实现 | 下发开灯、关灯、亮度调节等控制指令 |
+| `streetlight/{deviceId}/command/reply` | 设备 -> 后端 | 后续实现 | 返回控制指令执行结果 |
+| `streetlight/{deviceId}/alarm` | 设备 -> 后端 | 后续实现 | 设备主动上报告警 |
 
-## 遥测数据示例
+## Telemetry 上报
 
 Topic：
 
@@ -31,94 +55,38 @@ Payload：
 ```json
 {
   "deviceId": "SL-001",
-  "lightIntensity": 128,
+  "lightIntensity": 120,
   "lampStatus": "off",
   "voltage": 220.5,
-  "timestamp": "2026-07-01 14:00:00"
+  "timestamp": "2026-07-03 10:00:00"
 }
 ```
 
-## 状态心跳示例
+字段映射：
 
-Topic：
+| MQTT 字段 | 数据库字段 | 说明 |
+| --- | --- | --- |
+| deviceId | devices.device_code | 用于查找设备 |
+| lightIntensity | light_data.light_intensity | 光照强度 |
+| lampStatus | light_data.lamp_status | 路灯状态；缺失时默认 `off` |
+| voltage | light_data.voltage | 电压，可为空 |
+| timestamp | light_data.reported_at | 上报时间；缺失或格式错误时使用当前时间 |
 
-```text
-streetlight/SL-001/status
+## 异常处理约定
+
+1. payload 不是合法 JSON 时，只记录日志，不写入数据库。
+2. payload 缺少 `deviceId` 时，只记录日志，不写入数据库。
+3. `deviceId` 找不到对应设备时，只记录日志，不写入数据库。
+4. payload 缺少 `lightIntensity` 时，只记录日志，不写入数据库。
+5. payload 缺少 `lampStatus` 时，默认写入 `off`。
+6. MQTT 消息处理异常会 rollback 并关闭数据库 Session，不影响 HTTP 接口。
+
+## 测试示例
+
+使用 `mosquitto_pub`：
+
+```powershell
+mosquitto_pub -h 127.0.0.1 -p 1883 -t streetlight/SL-001/telemetry -m "{\"deviceId\":\"SL-001\",\"lightIntensity\":120,\"lampStatus\":\"off\",\"voltage\":220.5,\"timestamp\":\"2026-07-03 10:00:00\"}"
 ```
 
-Payload：
-
-```json
-{
-  "deviceId": "SL-001",
-  "online": true,
-  "lampStatus": "off",
-  "timestamp": "2026-07-01 14:00:10"
-}
-```
-
-## 控制指令示例
-
-Topic：
-
-```text
-streetlight/SL-001/command
-```
-
-Payload：
-
-```json
-{
-  "commandId": "cmd-20260701140100-001",
-  "deviceId": "SL-001",
-  "command": "TURN_ON",
-  "source": "manual",
-  "timestamp": "2026-07-01 14:01:00"
-}
-```
-
-## 指令回复示例
-
-Topic：
-
-```text
-streetlight/SL-001/command/reply
-```
-
-Payload：
-
-```json
-{
-  "commandId": "cmd-20260701140100-001",
-  "deviceId": "SL-001",
-  "result": "success",
-  "message": "lamp turned on",
-  "timestamp": "2026-07-01 14:01:02"
-}
-```
-
-## 告警示例
-
-Topic：
-
-```text
-streetlight/SL-001/alarm
-```
-
-Payload：
-
-```json
-{
-  "deviceId": "SL-001",
-  "alarmType": "light_abnormal",
-  "alarmLevel": "warning",
-  "content": "光照传感器读数异常",
-  "timestamp": "2026-07-01 14:02:00"
-}
-```
-
-## 后续约定
-
-1. 后端订阅 `streetlight/+/telemetry`、`streetlight/+/status`、`streetlight/+/command/reply`、`streetlight/+/alarm`。
-2. 后端下发指令只发布到 `streetlight/{deviceId}/command`。
-3. 设备收到指令后必须通过 `command/reply` 返回结果，便于前端展示控制状态。
+如果没有 `mosquitto_pub`，可以使用 MQTTX 图形化客户端连接 `127.0.0.1:1883`，向 `streetlight/SL-001/telemetry` 发布同样的 JSON。
