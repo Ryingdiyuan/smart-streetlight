@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import require_operator_or_admin, require_viewer_or_above
 from app.models.control_log import ControlLog
 from app.models.device import Device
 from app.mqtt.client import mqtt_client
@@ -61,6 +62,7 @@ def create_command(
     device_id: int,
     command_create: ControlCommandCreate,
     db: Session = Depends(get_db),
+    _current_user: object = Depends(require_operator_or_admin),
 ) -> ControlLog:
     device = get_device_or_404(db, device_id)
     payload = build_command_payload(command_create)
@@ -91,6 +93,7 @@ def list_commands(
     device_id: int,
     limit: int = Query(default=20, ge=1, le=200),
     db: Session = Depends(get_db),
+    _current_user: object = Depends(require_viewer_or_above),
 ) -> list[ControlLog]:
     get_device_or_404(db, device_id)
     return (

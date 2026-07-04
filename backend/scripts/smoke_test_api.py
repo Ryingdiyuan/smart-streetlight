@@ -10,6 +10,8 @@ from urllib.request import Request, urlopen
 
 
 BASE_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+SMOKE_TEST_USERNAME = os.getenv("SMOKE_TEST_USERNAME", "admin")
+SMOKE_TEST_PASSWORD = os.getenv("SMOKE_TEST_PASSWORD", "123456")
 
 
 class SmokeTest:
@@ -17,6 +19,7 @@ class SmokeTest:
         self.failed = 0
         self.device_id: int | None = None
         self.device_code = f"TEST-SL-{int(time.time())}"
+        self.access_token: str | None = None
 
     def request(
         self,
@@ -25,10 +28,13 @@ class SmokeTest:
         *,
         payload: dict[str, Any] | None = None,
         expected_status: int | tuple[int, ...] = 200,
+        auth_required: bool = True,
     ) -> tuple[int, Any]:
         url = f"{BASE_URL}{path}"
         body = None
         headers = {"Accept": "application/json"}
+        if auth_required and self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
         if payload is not None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             headers["Content-Type"] = "application/json"
@@ -73,8 +79,46 @@ class SmokeTest:
             print(f"PASS {name}")
 
     def test_health(self) -> None:
-        _, body = self.request("GET", "/api/health")
+        _, body = self.request("GET", "/api/health", auth_required=False)
         assert body.get("status") == "ok"
+
+    def login(self) -> None:
+        payload = {
+            "username": SMOKE_TEST_USERNAME,
+            "password": SMOKE_TEST_PASSWORD,
+        }
+        status_code, body = self.request(
+            "POST",
+            "/api/auth/login",
+            payload=payload,
+            expected_status=(200, 401),
+            auth_required=False,
+        )
+        if status_code == 200:
+            self.access_token = body["access_token"]
+            return
+
+        init_status, _ = self.request(
+            "POST",
+            "/api/auth/init-admin",
+            payload=payload,
+            expected_status=(201, 400),
+            auth_required=False,
+        )
+        if init_status == 400:
+            raise RuntimeError(
+                "login failed and admin already exists; please set "
+                "SMOKE_TEST_USERNAME and SMOKE_TEST_PASSWORD to an existing account"
+            )
+
+        _, body = self.request(
+            "POST",
+            "/api/auth/login",
+            payload=payload,
+            expected_status=200,
+            auth_required=False,
+        )
+        self.access_token = body["access_token"]
 
     def test_create_device(self) -> None:
         payload = {
@@ -173,6 +217,7 @@ class SmokeTest:
         print(f"Smoke test target: {BASE_URL}")
         steps = [
             ("GET /api/health", self.test_health),
+            ("POST /api/auth/login", self.login),
             ("POST /api/devices", self.test_create_device),
             ("GET /api/devices", self.test_list_devices),
             ("GET /api/devices/{id}", self.test_get_device),
