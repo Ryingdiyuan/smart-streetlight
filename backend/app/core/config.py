@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_timeout_seconds: int = 30
 
+    jwt_secret_key: str = Field(default="please-change-this-in-local-env", repr=False)
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 120
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
