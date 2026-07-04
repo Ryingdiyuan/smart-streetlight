@@ -5,7 +5,7 @@
         <p class="section-kicker">Devices</p>
         <h3>设备列表</h3>
       </div>
-      <p class="section-note">先完成表格与筛选交互，后续再接真实设备接口。</p>
+      <p class="section-note">已接入真实设备列表接口，支持按关键词与状态筛选。</p>
     </header>
 
     <div class="stats-grid">
@@ -34,7 +34,9 @@
         </div>
       </div>
 
-      <div class="table-wrapper">
+      <div v-if="loading" class="placeholder-box">正在加载真实设备数据...</div>
+      <div v-else-if="loadError" class="placeholder-box">{{ loadError }}</div>
+      <div v-else class="table-wrapper">
         <table>
           <thead>
             <tr>
@@ -91,6 +93,8 @@ import type { DashboardStat, Device } from "@/types/models";
 const devices = ref<Device[]>([]);
 const keyword = ref("");
 const statusFilter = ref<"all" | "online" | "offline">("all");
+const loading = ref(true);
+const loadError = ref("");
 
 const filterOptions = [
   { label: "全部", value: "all" as const },
@@ -135,6 +139,17 @@ const filteredDevices = computed(() => {
 });
 
 onMounted(async () => {
-  devices.value = await getDeviceList();
+  loading.value = true;
+  loadError.value = "";
+
+  try {
+    devices.value = await getDeviceList();
+  } catch (error) {
+    devices.value = [];
+    loadError.value =
+      error instanceof Error ? `设备列表加载失败：${error.message}` : "设备列表加载失败";
+  } finally {
+    loading.value = false;
+  }
 });
 </script>

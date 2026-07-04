@@ -5,7 +5,7 @@
         <p class="section-kicker">Alarms</p>
         <h3>告警日志</h3>
       </div>
-      <p class="section-note">当前先搭告警列表和处理状态展示，后续联动后端接口。</p>
+      <p class="section-note">告警列表已接入真实接口，可继续扩展处理动作与详情联动。</p>
     </header>
 
     <div class="stats-grid">
@@ -49,6 +49,7 @@
               <th>内容</th>
               <th>处理状态</th>
               <th>时间</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -70,9 +71,19 @@
                 />
               </td>
               <td>{{ alarm.createdAt }}</td>
+              <td>
+                <button
+                  class="ghost-button"
+                  type="button"
+                  :disabled="alarm.handled || handlingAlarmId === alarm.id"
+                  @click="handleAlarmRecord(alarm.id)"
+                >
+                  {{ alarm.handled ? "已处理" : handlingAlarmId === alarm.id ? "处理中..." : "处理告警" }}
+                </button>
+              </td>
             </tr>
             <tr v-if="!filteredAlarms.length">
-              <td colspan="7" class="table-empty">当前没有告警记录</td>
+              <td colspan="8" class="table-empty">当前没有告警记录</td>
             </tr>
           </tbody>
         </table>
@@ -87,12 +98,13 @@ import { computed, onMounted, ref } from "vue";
 import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
-import { getAlarmList } from "@/services/alarmService";
+import { getAlarmList, handleAlarm } from "@/services/alarmService";
 import type { AlarmLevel, AlarmRecord, DashboardStat } from "@/types/models";
 
 const alarms = ref<AlarmRecord[]>([]);
 const handledFilter = ref<"all" | "handled" | "unhandled">("all");
 const levelFilter = ref<"all" | AlarmLevel>("all");
+const handlingAlarmId = ref<string | null>(null);
 
 const handledOptions = [
   { label: "全部状态", value: "all" as const },
@@ -108,7 +120,7 @@ const levelOptions = [
 ];
 
 const summaryStats = computed<DashboardStat[]>(() => [
-  { label: "告警总数", value: String(alarms.value.length), helper: "当前模拟告警记录" },
+  { label: "告警总数", value: String(alarms.value.length), helper: "当前真实告警记录" },
   {
     label: "未处理",
     value: String(alarms.value.filter((alarm) => !alarm.handled).length),
@@ -142,4 +154,18 @@ const filteredAlarms = computed(() =>
 onMounted(async () => {
   alarms.value = await getAlarmList();
 });
+
+async function handleAlarmRecord(alarmId: string) {
+  if (handlingAlarmId.value) {
+    return;
+  }
+
+  handlingAlarmId.value = alarmId;
+  try {
+    const updatedAlarm = await handleAlarm(alarmId);
+    alarms.value = alarms.value.map((alarm) => (alarm.id === alarmId ? updatedAlarm : alarm));
+  } finally {
+    handlingAlarmId.value = null;
+  }
+}
 </script>

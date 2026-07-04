@@ -6,7 +6,7 @@
         <h3>实时光照监测</h3>
       </div>
       <p class="section-note">
-        每 5 秒自动刷新 · 模拟实时传感器数据
+        每 5 秒自动刷新 · 聚合真实设备与最新光照上报
         <span class="auto-refresh-dot" :class="{ refreshing }"></span>
       </p>
     </header>
@@ -79,7 +79,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 
-import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import { getRealtimeLightReadings } from "@/services/lightService";
@@ -93,7 +92,6 @@ let timer: ReturnType<typeof setInterval> | null = null;
 const stats = computed<DashboardStat[]>(() => {
   const items = readings.value;
   const total = items.length;
-  const online = items.filter((d) => d.status === "online").length;
   const intensities = items
     .filter((d) => d.status === "online")
     .map((d) => d.lightIntensity);

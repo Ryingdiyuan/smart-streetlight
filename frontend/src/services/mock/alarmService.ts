@@ -9,3 +9,14 @@ export async function getAlarmList(): Promise<AlarmRecord[]> {
   await delay();
   return structuredClone(mockAlarms);
 }
+
+export async function handleAlarm(alarmId: string): Promise<AlarmRecord> {
+  await delay();
+  const target = mockAlarms.find((alarm) => alarm.id === alarmId);
+  if (!target) {
+    throw new Error("告警不存在");
+  }
+
+  target.handled = true;
+  return structuredClone(target);
+}
