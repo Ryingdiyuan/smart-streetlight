@@ -310,3 +310,27 @@ POST /api/agent/chat
 - [docs/智能体测试问题清单.md](docs/智能体测试问题清单.md)：智能体典型问题和异常测试用例。
 - [docs/项目演示脚本.md](docs/项目演示脚本.md)：最终项目演示流程。
 - [docs/答辩说明.md](docs/答辩说明.md)：答辩讲解提纲。
+## Day 14 权限接入说明
+
+业务 HTTP 接口已经接入 JWT 权限控制。除公共接口和登录接口外，后续请求需要携带：
+
+```text
+Authorization: Bearer <access_token>
+```
+
+公共接口：
+
+- `GET /`
+- `GET /api/health`
+- `POST /api/auth/init-admin`
+- `POST /api/auth/login`
+
+角色说明：
+
+- `admin`：可以访问全部受保护业务接口。
+- `operator`：可以查看数据、上报光照、修改阈值、下发控制、处理告警；不能管理设备基础信息。
+- `viewer`：只能查看数据和使用智能体问答，不能执行写操作。
+
+Swagger 测试时，先调用 `POST /api/auth/login` 获取 `access_token`，再点击右上角 `Authorize` 填入 token。`scripts/smoke_test_api.py` 现在会先登录，再携带 Token 测试受保护接口。
+
+不要提交 `.env`、真实数据库密码、JWT Secret、API Key 或真实 Token。

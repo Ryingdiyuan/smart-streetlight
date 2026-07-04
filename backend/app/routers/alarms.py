@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_operator_or_admin, require_viewer_or_above
 from app.models.alarm_log import AlarmLog
 from app.schemas.alarm_log import AlarmLogRead
 
@@ -26,6 +27,7 @@ def list_alarms(
     alarm_type: str | None = None,
     limit: int = Query(default=20, ge=1, le=200),
     db: Session = Depends(get_db),
+    _current_user: object = Depends(require_viewer_or_above),
 ) -> list[AlarmLog]:
     query = db.query(AlarmLog)
 
@@ -38,12 +40,20 @@ def list_alarms(
 
 
 @router.get("/{alarm_id}", response_model=AlarmLogRead)
-def get_alarm(alarm_id: int, db: Session = Depends(get_db)) -> AlarmLog:
+def get_alarm(
+    alarm_id: int,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_viewer_or_above),
+) -> AlarmLog:
     return get_alarm_or_404(db, alarm_id)
 
 
 @router.put("/{alarm_id}/handle", response_model=AlarmLogRead)
-def handle_alarm(alarm_id: int, db: Session = Depends(get_db)) -> AlarmLog:
+def handle_alarm(
+    alarm_id: int,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_operator_or_admin),
+) -> AlarmLog:
     alarm = get_alarm_or_404(db, alarm_id)
     alarm.handled = True
     alarm.handled_at = datetime.utcnow()

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_admin, require_viewer_or_above
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
 
@@ -35,12 +36,19 @@ def ensure_device_code_unique(
 
 
 @router.get("", response_model=list[DeviceRead])
-def list_devices(db: Session = Depends(get_db)) -> list[Device]:
+def list_devices(
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_viewer_or_above),
+) -> list[Device]:
     return db.query(Device).order_by(Device.id.asc()).all()
 
 
 @router.get("/{device_id}", response_model=DeviceRead)
-def get_device(device_id: int, db: Session = Depends(get_db)) -> Device:
+def get_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_viewer_or_above),
+) -> Device:
     return get_device_or_404(db, device_id)
 
 
@@ -48,6 +56,7 @@ def get_device(device_id: int, db: Session = Depends(get_db)) -> Device:
 def create_device(
     device_create: DeviceCreate,
     db: Session = Depends(get_db),
+    _current_user: object = Depends(require_admin),
 ) -> Device:
     ensure_device_code_unique(db, device_create.device_code)
 
@@ -63,6 +72,7 @@ def update_device(
     device_id: int,
     device_update: DeviceUpdate,
     db: Session = Depends(get_db),
+    _current_user: object = Depends(require_admin),
 ) -> Device:
     device = get_device_or_404(db, device_id)
     update_data = device_update.model_dump(exclude_unset=True)
@@ -79,7 +89,11 @@ def update_device(
 
 
 @router.delete("/{device_id}")
-def delete_device(device_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
+def delete_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_admin),
+) -> dict[str, str]:
     device = get_device_or_404(db, device_id)
     db.delete(device)
     db.commit()
