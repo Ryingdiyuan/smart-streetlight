@@ -15,6 +15,7 @@
 - 手动控制命令发布
 - 设备心跳和离线告警
 - 智慧路灯运维问答 Agent
+- 登录认证、JWT Token 和用户角色基础
 - Swagger 接口文档和联调文档
 
 智能体问答当前为 MVP：可以根据后端已有设备、光照、阈值、控制日志和告警数据生成运维建议；不会直接控制路灯、修改阈值或处理告警。
@@ -94,6 +95,10 @@ LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
 LLM_TIMEOUT_SECONDS=30
+
+JWT_SECRET_KEY=please-change-this-in-local-env
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=120
 ```
 
 真实大模型配置说明：
@@ -101,6 +106,7 @@ LLM_TIMEOUT_SECONDS=30
 - `LLM_BASE_URL` 应填写到 OpenAI-compatible 服务的 `/v1` 层级，例如 `https://api.openai.com/v1`。
 - 不要写成 `https://api.openai.com/v1/chat/completions`，因为代码会自动追加 `/chat/completions`。
 - `LLM_API_KEY` 只能写在本地 `.env`，不要提交到 GitHub。
+- `JWT_SECRET_KEY` 在本地 `.env` 中必须替换为自己的随机字符串，不要提交到 GitHub。
 
 ### 4. 创建数据库
 
@@ -154,6 +160,18 @@ http://127.0.0.1:8000/docs
 
 - `GET /`
 - `GET /api/health`
+
+### 登录认证
+
+- `POST /api/auth/init-admin`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+说明：
+
+- Day 13 新增认证基础能力。
+- 当前未给旧业务接口强制加鉴权，避免破坏已有演示链路。
+- 后续需要鉴权的请求使用 `Authorization: Bearer <access_token>`。
 
 ### 设备管理
 
@@ -281,6 +299,7 @@ POST /api/agent/chat
 - [docs/后端技术选型.md](docs/后端技术选型.md)：后端技术栈选择说明。
 - [docs/数据库设计.md](docs/数据库设计.md)：数据库表结构和字段说明。
 - [docs/接口设计.md](docs/接口设计.md)：完整 HTTP 接口设计。
+- [docs/权限设计.md](docs/权限设计.md)：登录认证、JWT 和角色权限设计。
 - [docs/MQTT主题设计.md](docs/MQTT主题设计.md)：MQTT topic 和 payload 约定。
 - [docs/前端联调接口清单.md](docs/前端联调接口清单.md)：给前端联调使用的接口清单。
 - [docs/后端联调测试流程.md](docs/后端联调测试流程.md)：本地联调测试步骤。
