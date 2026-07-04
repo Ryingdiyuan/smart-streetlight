@@ -5,7 +5,10 @@
         <p class="section-kicker">Device Detail</p>
         <h3>设备详情</h3>
       </div>
-      <p class="section-note">设备详情、阈值配置、控制操作建议先合并在一页完成。</p>
+      <div class="button-row">
+        <p class="section-note">设备详情、阈值配置、控制日志和告警已开始接入真实接口。</p>
+        <button class="ghost-button" type="button" @click="goBackToList">返回设备列表</button>
+      </div>
     </header>
 
     <div v-if="device" class="stats-grid">
@@ -52,7 +55,7 @@
         </dl>
       </PanelCard>
 
-      <PanelCard v-if="device" title="控制与阈值" subtitle="支持 Mock 操作流">
+      <PanelCard v-if="device" title="控制与阈值" subtitle="支持真实阈值保存与控制命令">
         <div class="button-row">
           <button class="primary-button" @click="handleCommand('TURN_ON')">手动开灯</button>
           <button class="ghost-button" @click="handleCommand('TURN_OFF')">手动关灯</button>
@@ -179,7 +182,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import AlarmRecordPanel from "@/components/AlarmRecordPanel.vue";
 import CommandLogPanel from "@/components/CommandLogPanel.vue";
@@ -191,8 +194,9 @@ import { getDeviceDetail, sendDeviceCommand, updateDeviceThreshold } from "@/ser
 import type { CommandLog, DeviceDetail, ThresholdConfig } from "@/types/models";
 
 const route = useRoute();
+const router = useRouter();
 const device = ref<DeviceDetail | null>(null);
-const actionMessage = ref("保存后可模拟前后端交互流程");
+const actionMessage = ref("可直接对真实后端执行阈值保存和控制命令");
 const threshold = reactive<ThresholdConfig>({
   deviceId: "",
   lowThreshold: 0,
@@ -281,14 +285,18 @@ async function saveThreshold() {
   if (!device.value) return;
   const saved = await updateDeviceThreshold(device.value.id, { ...threshold });
   Object.assign(threshold, saved);
-  actionMessage.value = "阈值已通过 Mock Service 保存";
+  actionMessage.value = "阈值已保存到真实后端";
 }
 
 async function handleCommand(command: "TURN_ON" | "TURN_OFF") {
   if (!device.value) return;
   const log = await sendDeviceCommand(device.value.id, command);
-  actionMessage.value = `已模拟发送 ${log.command} 指令，结果：${log.result}`;
+  actionMessage.value = `已发送 ${log.command} 指令，结果：${log.result}`;
   await loadDetail();
+}
+
+async function goBackToList() {
+  await router.push("/devices");
 }
 
 onMounted(loadDetail);

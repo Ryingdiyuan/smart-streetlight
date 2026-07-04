@@ -1,44 +1,81 @@
-import { http } from "@/lib/http";
 import type { DashboardOverview } from "@/types/models";
 
+import { http } from "@/lib/http";
+import { getAlarmList } from "@/services/api/alarmService";
+import { getDeviceList } from "@/services/api/deviceService";
+import { getLightHistory, getRealtimeLightReadings } from "@/services/api/lightService";
+import { type ControlLogApiPayload, isHttpStatus, mapCommandLogPayload } from "@/services/api/normalizers";
+
+async function getRecentCommands(deviceId: number, deviceCode: string) {
+  try {
+    const logs = await http.get<ControlLogApiPayload[]>(`/devices/${deviceId}/commands`);
+    return logs.map((item) => mapCommandLogPayload(item, deviceCode));
+  } catch (error) {
+    if (isHttpStatus(error, 404)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 export async function getDashboardOverview(): Promise<DashboardOverview> {
-  const [devices, alarms] = await Promise.all([
-    http.get<DashboardOverview["devices"]>("/devices"),
-    http.get<DashboardOverview["latestAlarms"]>("/alarms"),
+  const [devices, readings, latestAlarms] = await Promise.all([
+    getDeviceList(),
+    getRealtimeLightReadings(),
+    getAlarmList(),
   ]);
 
-  const onlineCount = devices.filter((item) => item.status === "online").length;
-  const lampOnCount = devices.filter((item) => item.lampStatus === "ON").length;
-  const latestAlarms = alarms.slice(0, 5);
-  const featuredDeviceItem = devices[0];
-  const featuredDevice = devices[0] ?? {
+  const readingByDeviceId = new Map(readings.map((reading) => [reading.deviceId, reading]));
+  const enrichedDevices = devices.map((device) => {
+    const reading = readingByDeviceId.get(device.id);
+    if (!reading) {
+      return device;
+    }
+
+    return {
+      ...device,
+      lampStatus: reading.lampStatus,
+      lastHeartbeatAt: reading.updatedAt || device.lastHeartbeatAt,
+    };
+  });
+
+  const onlineCount = enrichedDevices.filter((item) => item.status === "online").length;
+  const lampOnCount = enrichedDevices.filter((item) => item.lampStatus === "ON").length;
+  const latestUnhandled = latestAlarms.filter((item) => !item.handled);
+  const featuredDevice = enrichedDevices[0] ?? {
     deviceCode: "--",
     deviceName: "暂无设备",
     status: "offline" as const,
     lampStatus: "OFF" as const,
   };
-  const [featuredHistory, recentCommands] = featuredDeviceItem
-    ? await Promise.all([
-        http.get<DashboardOverview["featuredHistory"]>(
-          `/devices/${featuredDeviceItem.id}/light-history`,
-        ),
-        http.get<DashboardOverview["recentCommands"]>(
-          `/devices/${featuredDeviceItem.id}/commands`,
-        ),
-      ])
-    : [[], []];
+
+  const [featuredHistory, recentCommandsByDevice] =
+    enrichedDevices.length > 0
+      ? await Promise.all([
+          getLightHistory(enrichedDevices[0].id).catch(() => []),
+          Promise.all(
+            enrichedDevices.map((device) =>
+              getRecentCommands(device.id, device.deviceCode).catch(() => []),
+            ),
+          ),
+        ])
+      : [[], []];
+
+  const recentCommands = recentCommandsByDevice
+    .flat()
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
   return {
     stats: [
-      { label: "设备总数", value: String(devices.length), helper: "来自真实接口" },
-      { label: "在线设备", value: String(onlineCount), helper: "设备列表统计结果" },
-      { label: "离线告警", value: String(alarms.filter((item) => !item.handled).length), helper: "来自告警列表" },
-      { label: "当前开灯", value: String(lampOnCount), helper: "实时路灯状态统计" },
+      { label: "设备总数", value: String(enrichedDevices.length), helper: "来自真实接口" },
+      { label: "在线设备", value: String(onlineCount), helper: "设备状态实时统计" },
+      { label: "离线告警", value: String(latestUnhandled.length), helper: "未处理告警数量" },
+      { label: "当前开灯", value: String(lampOnCount), helper: "基于最新光照上报" },
     ],
-    latestAlarms,
+    latestAlarms: latestAlarms.slice(0, 5),
     featuredDevice,
     featuredHistory,
-    devices,
+    devices: enrichedDevices,
     recentCommands,
   };
 }

@@ -5,7 +5,7 @@
         <p class="section-kicker">Overview</p>
         <h3>总览大屏</h3>
       </div>
-      <p class="section-note">已接入模拟数据、设备快照、最近告警和趋势图，适合作为答辩展示首页。</p>
+      <p class="section-note">已接入真实设备、告警与趋势数据，可作为当前联调首页。</p>
     </header>
 
     <div class="stats-grid">
@@ -13,7 +13,7 @@
     </div>
 
     <div class="content-grid two-columns">
-      <PanelCard title="重点设备趋势" subtitle="SL-001 / Mock 曲线">
+      <PanelCard title="重点设备趋势" subtitle="来自真实历史光照接口">
         <div class="chart-header-row">
           <div>
             <strong>{{ featuredDevice.deviceName }}</strong>
@@ -26,7 +26,7 @@
         <TrendLineChart :points="featuredHistory" />
       </PanelCard>
 
-      <PanelCard title="状态分布图" subtitle="在线、离线与路灯状态总览">
+      <PanelCard title="状态分布图" subtitle="在线、离线设备总览">
         <StatusDonutChart
           :online-count="onlineCount"
           :offline-count="offlineCount"
@@ -37,7 +37,7 @@
     </div>
 
     <div class="content-grid two-columns">
-      <PanelCard title="最近告警" subtitle="由 Mock 服务驱动">
+      <PanelCard title="最近告警" subtitle="来自真实告警接口">
         <div v-if="latestAlarms.length" class="alarm-preview-list">
           <div v-for="alarm in latestAlarms" :key="alarm.id" class="alarm-preview-item">
             <div class="list-row">
@@ -77,7 +77,7 @@
     </div>
 
     <PanelCard title="最近控制记录" subtitle="便于答辩演示控制闭环">
-      <div class="table-wrapper">
+      <div class="table-wrapper scroll-table-wrapper">
         <table>
           <thead>
             <tr>
@@ -96,18 +96,12 @@
               <td>{{ log.result }}</td>
               <td>{{ log.createdAt }}</td>
             </tr>
+            <tr v-if="!recentCommands.length">
+              <td colspan="5" class="table-empty">当前没有控制记录</td>
+            </tr>
           </tbody>
         </table>
       </div>
-    </PanelCard>
-
-    <PanelCard title="功能规划" subtitle="第一阶段必须完成">
-      <ul class="feature-list">
-        <li>实时光照监测与状态卡片</li>
-        <li>历史趋势图与自动刷新</li>
-        <li>设备在线离线统计</li>
-        <li>最近告警与控制反馈</li>
-      </ul>
     </PanelCard>
   </section>
 </template>

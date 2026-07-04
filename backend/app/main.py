@@ -7,12 +7,14 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.mqtt.client import mqtt_client
 from app.routers import api_router
+from app.services.simulator_service import simulator_manager
 from app.tasks.scheduler import scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    simulator_manager.start()
     if settings.mqtt_enabled:
         mqtt_client.start()
     if settings.scheduler_enabled:
@@ -22,6 +24,7 @@ async def lifespan(app: FastAPI):
         scheduler.shutdown(wait=False)
     if settings.mqtt_enabled:
         mqtt_client.stop()
+    simulator_manager.stop()
 
 
 app = FastAPI(

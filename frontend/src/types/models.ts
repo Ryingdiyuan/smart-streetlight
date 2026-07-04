@@ -33,7 +33,7 @@ export interface CommandLog {
   deviceId: string;
   command: CommandType;
   source: CommandSource;
-  result: "pending" | "success" | "failed";
+  result: "pending" | "success" | "failed" | "skipped";
   createdAt: string;
 }
 
@@ -70,6 +70,29 @@ export interface DashboardOverview {
   recentCommands: CommandLog[];
 }
 
+export interface LoginPayload {
+  username: string;
+  password: string;
+}
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  role: string;
+  is_active?: boolean;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+export interface AuthSession {
+  token: string;
+  user: AuthUser;
+}
+
 export interface AgentMessage {
   id: string;
   role: "user" | "assistant";
@@ -90,4 +113,42 @@ export interface RealtimeLightReading {
   lampStatus: LampStatus;
   lightIntensity: number;
   updatedAt: string;
+}
+
+export interface SimulatorBrokerConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  clientId: string;
+  connected: boolean;
+}
+
+export interface SimulatorDevice {
+  deviceId: number;
+  deviceCode: string;
+  deviceName: string;
+  location: string;
+  running: boolean;
+  online: boolean;
+  lampStatus: "on" | "off";
+  brightness: number;
+  baseLight: number;
+  variance: number;
+  voltageBase: number;
+  telemetryIntervalSeconds: number;
+  statusEvery: number;
+  publishCount: number;
+  currentLightIntensity: number;
+  lastTelemetryAt: string;
+  lastStatusAt: string;
+  lastCommandAt: string;
+  lastCommand: string;
+}
+
+export interface SimulatorLogEntry {
+  createdAt: string;
+  level: string;
+  message: string;
 }

@@ -139,10 +139,10 @@ import { computed, onMounted, ref } from "vue";
 import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
+import { getDeviceList } from "@/services/deviceService";
 import TrendLineChart from "@/components/TrendLineChart.vue";
 import { getLightHistory } from "@/services/lightService";
 import type { DashboardStat, Device, LightHistoryPoint } from "@/types/models";
-import { mockDevices } from "@/mock/data";
 
 const PAGE_SIZE = 20;
 
@@ -235,7 +235,13 @@ function selectRange(range: number) {
 }
 
 onMounted(async () => {
-  devices.value = structuredClone(mockDevices);
+  devices.value = await getDeviceList();
+  if (!devices.value.length) {
+    allHistory.value = [];
+    return;
+  }
+
+  selectedDeviceId.value = devices.value[0].id;
   allHistory.value = await getLightHistory(selectedDeviceId.value);
 });
 </script>

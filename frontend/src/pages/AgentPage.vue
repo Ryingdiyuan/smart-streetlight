@@ -5,7 +5,7 @@
         <p class="section-kicker">Agent</p>
         <h3>智能问答</h3>
       </div>
-      <p class="section-note">当前已升级为聊天面板风格，后续直接替换成真实智能体接口。</p>
+      <p class="section-note">当前已升级为聊天面板风格，并已接入真实智能体接口。</p>
     </header>
 
     <div class="content-grid two-columns">
@@ -17,7 +17,7 @@
           </div>
           <div class="summary-box">
             <strong>当前模式</strong>
-            <span>Mock 对话流，后续接 `/api/agent/chat`</span>
+            <span>真实 `/api/agent/chat` 问答接口</span>
           </div>
           <div class="prompt-chip-list">
             <button

@@ -1,4 +1,4 @@
-const serviceMode = import.meta.env.VITE_SERVICE_MODE ?? "mock";
+const serviceMode = import.meta.env.VITE_SERVICE_MODE ?? "api";
 
 export const runtimeConfig = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? "/api",
