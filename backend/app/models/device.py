@@ -14,6 +14,7 @@ class Device(Base):
     device_name: Mapped[str] = mapped_column(String(100))
     location: Mapped[str | None] = mapped_column(String(255), default=None)
     status: Mapped[str] = mapped_column(String(20), default="offline")
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

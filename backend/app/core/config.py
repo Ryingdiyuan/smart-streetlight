@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     mqtt_client_id: str = "smart-streetlight-backend"
 
     scheduler_enabled: bool = True
+    device_offline_seconds: int = 180
 
     model_config = SettingsConfigDict(
         env_file=".env",
