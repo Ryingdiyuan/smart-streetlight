@@ -18,6 +18,66 @@ SYSTEM_PROMPT = """你是智慧路灯节能系统的运维问答助手。
 优先用中文回答。"""
 
 
+def describe_light_with_threshold(context: dict[str, Any]) -> str:
+    latest = context.get("latest_light")
+    config = context.get("threshold_config")
+    if not latest:
+        return "当前没有查到最新光照数据，建议检查设备 telemetry 上报程序和 MQTT 连接。"
+    if not config:
+        return (
+            f"最新光照强度为 {latest['light_intensity']}，路灯状态为 {latest['lamp_status']}。"
+            "当前没有查到阈值配置，建议先确认阈值配置是否已创建。"
+        )
+    if not config["enabled"]:
+        return (
+            f"最新光照强度为 {latest['light_intensity']}，但该设备阈值判断已关闭，"
+            "系统暂不生成开关灯建议。"
+        )
+
+    light_intensity = latest["light_intensity"]
+    if light_intensity < config["low_threshold"]:
+        suggestion = "低于低阈值，系统建议开灯"
+    elif light_intensity > config["high_threshold"]:
+        suggestion = "高于高阈值，系统建议关灯"
+    else:
+        suggestion = "处于阈值区间内，建议保持当前状态"
+
+    return (
+        f"最新光照强度为 {light_intensity}，低阈值为 {config['low_threshold']}，"
+        f"高阈值为 {config['high_threshold']}，{suggestion}。"
+    )
+
+
+def describe_device_alarms(context: dict[str, Any]) -> str:
+    unhandled_count = context["unhandled_alarm_count"]
+    alarms = context.get("alarm_logs", [])
+    if unhandled_count == 0:
+        return "当前没有未处理告警。"
+
+    offline_alarm = next(
+        (alarm for alarm in alarms if alarm["alarm_type"] == "offline" and not alarm["handled"]),
+        None,
+    )
+    if offline_alarm:
+        return (
+            f"该设备有 {unhandled_count} 条未处理告警，其中包含离线告警。"
+            "建议先检查供电、网络、设备网关和 MQTT status 心跳上报程序。"
+        )
+    return f"该设备有 {unhandled_count} 条未处理告警，建议先查看告警列表并确认告警原因。"
+
+
+def describe_control_logs(context: dict[str, Any]) -> str:
+    control_logs = context.get("control_logs", [])
+    if not control_logs:
+        return "最近没有查到人工控制记录。"
+
+    latest_log = control_logs[0]
+    return (
+        f"最近一次人工控制命令为 {latest_log['command']}，执行结果记录为 {latest_log['result']}，"
+        f"时间为 {latest_log['created_at']}。"
+    )
+
+
 def build_mock_answer(question: str, context: dict[str, Any]) -> str:
     if context["scope"] == "device":
         device = context["device"]
@@ -26,22 +86,15 @@ def build_mock_answer(question: str, context: dict[str, Any]) -> str:
         ]
         if device.get("last_heartbeat_at"):
             parts.append(f"最近一次心跳时间为 {device['last_heartbeat_at']}。")
-        if context.get("latest_light"):
-            latest = context["latest_light"]
-            parts.append(
-                f"最新光照强度为 {latest['light_intensity']}，路灯状态为 {latest['lamp_status']}。"
-            )
-        else:
-            parts.append("当前没有查到最新光照数据。")
 
-        if context["unhandled_alarm_count"] > 0:
-            parts.append(
-                f"该设备有 {context['unhandled_alarm_count']} 条未处理告警，建议优先查看告警详情。"
-            )
+        parts.append(describe_light_with_threshold(context))
+        parts.append(describe_device_alarms(context))
+        parts.append(describe_control_logs(context))
+
         if device["status"] == "offline":
-            parts.append("建议检查设备供电、网络连接和 MQTT status 心跳上报程序。")
+            parts.append("设备当前离线，建议优先排查供电、网络、设备网关和心跳程序。")
         else:
-            parts.append("建议结合历史光照、阈值配置和控制日志继续排查。")
+            parts.append("设备当前在线，建议结合光照趋势、阈值配置和最近控制记录继续判断。")
         return "".join(parts)
 
     stats = context["device_stats"]
@@ -49,11 +102,24 @@ def build_mock_answer(question: str, context: dict[str, Any]) -> str:
     if stats["device_count"] == 0:
         return "当前系统还没有设备数据，无法判断运行情况。建议先创建设备并上报光照或心跳数据。"
 
-    return (
+    parts = [
         f"当前系统共有 {stats['device_count']} 台设备，在线 {stats['online_count']} 台，"
         f"离线 {stats['offline_count']} 台，未处理告警 {unhandled} 条。"
-        "建议优先关注离线设备和未处理告警，再检查最近控制日志与光照上报是否正常。"
-    )
+    ]
+    if stats["offline_count"] > 0:
+        parts.append("建议优先关注离线设备，检查供电、网络、网关和 MQTT 心跳上报。")
+    if unhandled > 0:
+        parts.append("建议进入告警列表查看未处理告警，并按设备逐一确认原因。")
+    if context.get("recent_control_logs"):
+        latest_log = context["recent_control_logs"][0]
+        parts.append(
+            f"最近一条控制记录为 {latest_log['command']}，结果为 {latest_log['result']}。"
+        )
+    else:
+        parts.append("当前没有查到最近控制记录。")
+    if stats["offline_count"] == 0 and unhandled == 0:
+        parts.append("系统整体状态较稳定，建议继续观察 telemetry 和 status 上报是否持续正常。")
+    return "".join(parts)
 
 
 def build_fallback_answer(question: str, context: dict[str, Any], reason: str) -> str:

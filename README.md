@@ -96,6 +96,12 @@ LLM_MODEL=
 LLM_TIMEOUT_SECONDS=30
 ```
 
+真实大模型配置说明：
+
+- `LLM_BASE_URL` 应填写到 OpenAI-compatible 服务的 `/v1` 层级，例如 `https://api.openai.com/v1`。
+- 不要写成 `https://api.openai.com/v1/chat/completions`，因为代码会自动追加 `/chat/completions`。
+- `LLM_API_KEY` 只能写在本地 `.env`，不要提交到 GitHub。
+
 ### 4. 创建数据库
 
 ```sql
@@ -231,6 +237,45 @@ $env:BACKEND_BASE_URL="http://127.0.0.1:8000"
 - `streetlight/SL-001/status`
 - `streetlight/SL-001/command`
 
+### 智能体问答
+
+本地 mock 模式：
+
+```env
+LLM_ENABLED=false
+```
+
+调用：
+
+```text
+POST /api/agent/chat
+```
+
+请求示例：
+
+```json
+{
+  "question": "当前系统有哪些设备需要关注？"
+}
+```
+
+更多测试问题见 [docs/智能体测试问题清单.md](docs/智能体测试问题清单.md)。
+
+## 最终演示流程
+
+推荐按 [docs/项目演示脚本.md](docs/项目演示脚本.md) 演示：
+
+1. 启动 MySQL、Mosquitto 和 FastAPI。
+2. 打开 Swagger `/docs` 和 MQTTX。
+3. 创建设备并上报光照数据。
+4. 通过 MQTTX 发布 telemetry 和 status。
+5. 配置阈值并观察 `suggested_action`。
+6. 调用手动控制接口，并在 MQTTX 查看 command。
+7. 等待离线检测生成告警，查询并处理告警。
+8. 调用 `POST /api/agent/chat` 展示智能体运维建议。
+
+答辩讲解可参考 [docs/答辩说明.md](docs/答辩说明.md)。
+
 ## 文档目录
 
 - [docs/后端技术选型.md](docs/后端技术选型.md)：后端技术栈选择说明。
@@ -243,3 +288,6 @@ $env:BACKEND_BASE_URL="http://127.0.0.1:8000"
 - [docs/项目总结.md](docs/项目总结.md)：阶段性项目总结。
 - [docs/简历项目描述.md](docs/简历项目描述.md)：简历和面试表达材料。
 - [docs/智能体问答设计.md](docs/智能体问答设计.md)：智能体问答 MVP 设计说明。
+- [docs/智能体测试问题清单.md](docs/智能体测试问题清单.md)：智能体典型问题和异常测试用例。
+- [docs/项目演示脚本.md](docs/项目演示脚本.md)：最终项目演示流程。
+- [docs/答辩说明.md](docs/答辩说明.md)：答辩讲解提纲。
