@@ -14,9 +14,10 @@
 - 阈值配置和自动判断建议
 - 手动控制命令发布
 - 设备心跳和离线告警
+- 智慧路灯运维问答 Agent
 - Swagger 接口文档和联调文档
 
-智能体问答计划在后续阶段接入，当前版本未实现。
+智能体问答当前为 MVP：可以根据后端已有设备、光照、阈值、控制日志和告警数据生成运维建议；不会直接控制路灯、修改阈值或处理告警。
 
 ## 技术栈
 
@@ -86,6 +87,13 @@ MQTT_CLIENT_ID=smart-streetlight-backend
 
 SCHEDULER_ENABLED=true
 DEVICE_OFFLINE_SECONDS=180
+
+LLM_ENABLED=false
+LLM_PROVIDER=openai-compatible
+LLM_API_KEY=
+LLM_BASE_URL=
+LLM_MODEL=
+LLM_TIMEOUT_SECONDS=30
 ```
 
 ### 4. 创建数据库
@@ -171,6 +179,26 @@ http://127.0.0.1:8000/docs
 - `GET /api/alarms/{alarm_id}`
 - `PUT /api/alarms/{alarm_id}/handle`
 
+### 智能体问答
+
+- `POST /api/agent/chat`
+
+示例请求：
+
+```json
+{
+  "question": "SL-001 最近为什么离线？",
+  "device_code": "SL-001"
+}
+```
+
+说明：
+
+- `LLM_ENABLED=false` 时返回规则版回答，适合本地演示。
+- `LLM_ENABLED=true` 时按 OpenAI-compatible chat completions 风格调用大模型。
+- API Key 只能写在本地 `.env`，不要提交到 GitHub。
+- 智能体只提供排查建议，不会直接执行开灯、关灯、修改阈值或处理告警。
+
 ## 测试方式
 
 ### Swagger
@@ -214,3 +242,4 @@ $env:BACKEND_BASE_URL="http://127.0.0.1:8000"
 - [docs/接口测试清单.md](docs/接口测试清单.md)：接口测试项清单。
 - [docs/项目总结.md](docs/项目总结.md)：阶段性项目总结。
 - [docs/简历项目描述.md](docs/简历项目描述.md)：简历和面试表达材料。
+- [docs/智能体问答设计.md](docs/智能体问答设计.md)：智能体问答 MVP 设计说明。
