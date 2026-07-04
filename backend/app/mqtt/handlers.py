@@ -73,6 +73,35 @@ def handle_telemetry_payload(payload: dict[str, Any], db: Session) -> None:
     )
 
 
+def parse_online_status(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "online", "on", "yes"}
+    return bool(value)
+
+
+def handle_status_payload(payload: dict[str, Any], db: Session) -> None:
+    device_code = payload.get("deviceId") or payload.get("device_code")
+    if not device_code:
+        logger.warning("Status payload missing deviceId: %s", payload)
+        return
+
+    device = db.query(Device).filter(Device.device_code == device_code).first()
+    if device is None:
+        logger.warning("Status device not registered: %s", device_code)
+        return
+
+    is_online = parse_online_status(payload.get("online"))
+    device.status = "online" if is_online else "offline"
+    device.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
+    db.commit()
+    db.refresh(device)
+    logger.info("Updated device status from MQTT status topic: %s -> %s", device_code, device.status)
+
+
 def handle_telemetry_message(topic: str, payload_bytes: bytes) -> None:
     try:
         payload_text = payload_bytes.decode("utf-8")
@@ -97,5 +126,33 @@ def handle_telemetry_message(topic: str, payload_bytes: bytes) -> None:
     except Exception:
         db.rollback()
         logger.exception("Failed to save MQTT telemetry, topic=%s", topic)
+    finally:
+        db.close()
+
+
+def handle_status_message(topic: str, payload_bytes: bytes) -> None:
+    try:
+        payload_text = payload_bytes.decode("utf-8")
+        payload = json.loads(payload_text)
+    except UnicodeDecodeError:
+        logger.warning("Status payload is not valid UTF-8, topic=%s", topic)
+        return
+    except json.JSONDecodeError:
+        logger.warning("Status payload is not valid JSON, topic=%s", topic)
+        return
+
+    if not isinstance(payload, dict):
+        logger.warning("Status payload is not a JSON object, topic=%s", topic)
+        return
+
+    db = SessionLocal()
+    try:
+        handle_status_payload(payload, db)
+    except (TypeError, ValueError):
+        db.rollback()
+        logger.exception("Invalid status payload, topic=%s payload=%s", topic, payload)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to save MQTT status, topic=%s", topic)
     finally:
         db.close()

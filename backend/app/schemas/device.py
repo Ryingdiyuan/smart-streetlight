@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -21,5 +23,6 @@ class DeviceUpdate(BaseModel):
 
 class DeviceRead(DeviceBase):
     id: int
+    last_heartbeat_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
