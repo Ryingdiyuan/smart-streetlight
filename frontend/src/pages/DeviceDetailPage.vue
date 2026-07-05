@@ -181,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import AlarmRecordPanel from "@/components/AlarmRecordPanel.vue";
@@ -197,6 +197,8 @@ const route = useRoute();
 const router = useRouter();
 const device = ref<DeviceDetail | null>(null);
 const actionMessage = ref("可直接对真实后端执行阈值保存和控制命令");
+let refreshTimer: number | undefined;
+let commandRefreshTimer: number | undefined;
 const threshold = reactive<ThresholdConfig>({
   deviceId: "",
   lowThreshold: 0,
@@ -293,12 +295,33 @@ async function handleCommand(command: "TURN_ON" | "TURN_OFF") {
   const log = await sendDeviceCommand(device.value.id, command);
   actionMessage.value = `已发送 ${log.command} 指令，结果：${log.result}`;
   await loadDetail();
+  if (commandRefreshTimer !== undefined) {
+    window.clearTimeout(commandRefreshTimer);
+  }
+  commandRefreshTimer = window.setTimeout(() => {
+    void loadDetail();
+  }, 1200);
 }
 
 async function goBackToList() {
   await router.push("/devices");
 }
 
-onMounted(loadDetail);
+onMounted(() => {
+  void loadDetail();
+  refreshTimer = window.setInterval(() => {
+    void loadDetail();
+  }, 3000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer !== undefined) {
+    window.clearInterval(refreshTimer);
+  }
+  if (commandRefreshTimer !== undefined) {
+    window.clearTimeout(commandRefreshTimer);
+  }
+});
+
 watch(() => route.params.id, loadDetail);
 </script>

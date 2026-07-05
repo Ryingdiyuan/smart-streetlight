@@ -6,7 +6,7 @@
         <h3>历史光照数据</h3>
       </div>
       <p class="section-note">
-        查看各设备的历史光照趋势 · 共 {{ totalPoints }} 个采样点
+        查看各设备的历史光照趋势 · 当前范围内共 {{ totalPoints }} 个原始采样点
       </p>
     </header>
 
@@ -50,12 +50,13 @@
     </PanelCard>
 
     <div class="content-grid two-columns">
-      <PanelCard title="光照趋势曲线" subtitle="选定设备与时段">
-        <TrendLineChart v-if="filteredPoints.length" :points="filteredPoints" />
+      <PanelCard title="光照趋势曲线" :subtitle="`选定设备与时段 · ${aggregationLabel}`">
+        <div v-if="loading" class="placeholder-box">正在加载并聚合历史数据...</div>
+        <TrendLineChart v-else-if="chartPoints.length" :points="chartPoints" />
         <div v-else class="placeholder-box">该时段暂无数据</div>
       </PanelCard>
 
-      <PanelCard title="数据摘要" subtitle="统计信息">
+      <PanelCard title="数据摘要" subtitle="基于当前范围内原始数据统计">
         <div v-if="summary" class="summary-grid">
           <div class="summary-box">
             <span>平均光照</span>
@@ -86,27 +87,31 @@
       </PanelCard>
     </div>
 
-    <PanelCard title="采样记录" subtitle="详细数据列表">
+    <PanelCard title="趋势采样记录" :subtitle="aggregationLabel">
       <div class="toolbar-row">
-        <span class="record-count">共 {{ filteredPoints.length }} 条记录</span>
+        <span class="record-count">共 {{ aggregatedPoints.length }} 个聚合时间段</span>
       </div>
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>时间</th>
-              <th>光照强度 (lux)</th>
-              <th>路灯状态</th>
+              <th>时间段</th>
+              <th>平均光照 (lux)</th>
+              <th>范围</th>
+              <th>开灯占比</th>
+              <th>代表状态</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(point, idx) in pagedPoints" :key="idx">
-              <td>{{ point.timestamp }}</td>
+              <td>{{ point.spanLabel }}</td>
               <td>
                 <span class="intensity-cell" :style="{ color: cellColor(point.lightIntensity) }">
                   {{ point.lightIntensity }}
                 </span>
               </td>
+              <td>{{ point.min }} ~ {{ point.max }}</td>
+              <td>{{ point.lampOnRatio }}%</td>
               <td>
                 <StatusBadge
                   :status="point.lampStatus === 'ON' ? 'success' : 'info'"
@@ -114,8 +119,8 @@
                 />
               </td>
             </tr>
-            <tr v-if="!filteredPoints.length">
-              <td colspan="3" class="table-empty">暂无数据</td>
+            <tr v-if="!aggregatedPoints.length">
+              <td colspan="5" class="table-empty">暂无数据</td>
             </tr>
           </tbody>
         </table>
@@ -146,41 +151,65 @@ import type { DashboardStat, Device, LightHistoryPoint } from "@/types/models";
 
 const PAGE_SIZE = 20;
 
+interface TimeRangeOption {
+  label: string;
+  value: number;
+  bucketHours: number;
+  limit: number;
+}
+
+interface AggregatedHistoryPoint extends LightHistoryPoint {
+  min: number;
+  max: number;
+  sampleCount: number;
+  lampOnRatio: number;
+  spanLabel: string;
+}
+
 const devices = ref<Device[]>([]);
-const allHistory = ref<LightHistoryPoint[]>([]);
+const rawHistory = ref<LightHistoryPoint[]>([]);
 const selectedDeviceId = ref<number>(1);
 const selectedRange = ref<number>(1);
 const currentPage = ref(1);
+const loading = ref(false);
 
-const timeRanges = [
-  { label: "近 24 小时", value: 1 },
-  { label: "近 3 天", value: 3 },
-  { label: "近 7 天", value: 7 },
+const timeRanges: TimeRangeOption[] = [
+  { label: "近 24 小时", value: 1, bucketHours: 1, limit: 240 },
+  { label: "近 3 天", value: 3, bucketHours: 3, limit: 720 },
+  { label: "近 7 天", value: 7, bucketHours: 12, limit: 1500 },
 ];
 
-const totalPoints = computed(() => allHistory.value.length);
+const totalPoints = computed(() => rawHistory.value.length);
 
-const filteredPoints = computed(() => {
-  const all = allHistory.value;
-  if (!all.length) return [];
+const activeRange = computed(
+  () => timeRanges.find((range) => range.value === selectedRange.value) ?? timeRanges[0],
+);
 
-  const rangeHours = selectedRange.value * 24;
-  // 估算有多少个点（每 10 分钟一个点）
-  const pointsInRange = rangeHours * 6;
-  return all.slice(-pointsInRange);
-});
+const aggregationLabel = computed(() => `按 ${activeRange.value.bucketHours} 小时聚合展示`);
+
+const aggregatedPoints = computed<AggregatedHistoryPoint[]>(() =>
+  aggregateHistory(rawHistory.value, activeRange.value.bucketHours),
+);
+
+const chartPoints = computed<LightHistoryPoint[]>(() =>
+  aggregatedPoints.value.map((point) => ({
+    timestamp: point.timestamp,
+    lightIntensity: point.lightIntensity,
+    lampStatus: point.lampStatus,
+  })),
+);
 
 const pagedPoints = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE;
-  return filteredPoints.value.slice(start, start + PAGE_SIZE);
+  return aggregatedPoints.value.slice(start, start + PAGE_SIZE);
 });
 
 const totalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredPoints.value.length / PAGE_SIZE)),
+  Math.max(1, Math.ceil(aggregatedPoints.value.length / PAGE_SIZE)),
 );
 
 const summary = computed(() => {
-  const pts = filteredPoints.value;
+  const pts = rawHistory.value;
   if (!pts.length) return null;
 
   const intensities = pts.map((p) => p.lightIntensity);
@@ -204,7 +233,7 @@ const stats = computed<DashboardStat[]>(() => {
       { label: "选择设备", value: "-", helper: "请从上方选择" },
       { label: "数据范围", value: "-", helper: "-" },
       { label: "平均光照", value: "-", helper: "-" },
-      { label: "采样点数", value: "-", helper: "-" },
+      { label: "聚合粒度", value: "-", helper: "-" },
     ];
   }
   const device = devices.value.find((d) => d.id === selectedDeviceId.value);
@@ -212,7 +241,7 @@ const stats = computed<DashboardStat[]>(() => {
     { label: "当前设备", value: device?.deviceName ?? "-", helper: device?.deviceCode ?? "" },
     { label: "时间范围", value: `${selectedRange.value} 天`, helper: "可切换时段" },
     { label: "平均光照", value: `${s.avg} lux`, helper: "选定范围内" },
-    { label: "采样点数", value: String(s.count), helper: "每 10 分钟一条" },
+    { label: "聚合粒度", value: `${activeRange.value.bucketHours} 小时`, helper: `${s.count} 个原始点` },
   ];
 });
 
@@ -223,26 +252,107 @@ function cellColor(val: number): string {
   return "#7dd3fc";
 }
 
-async function selectDevice(id: number) {
-  selectedDeviceId.value = id;
-  currentPage.value = 1;
-  allHistory.value = await getLightHistory(id);
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
-function selectRange(range: number) {
-  selectedRange.value = range;
+function formatApiDateTime(value: Date): string {
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+}
+
+function parsePointDate(value: string): Date {
+  return new Date(value.replace(" ", "T"));
+}
+
+function formatBucketText(value: Date): string {
+  return `${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:00`;
+}
+
+function formatSpanLabel(start: Date, end: Date): string {
+  return `${formatBucketText(start)} ~ ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+}
+
+function aggregateHistory(points: LightHistoryPoint[], bucketHours: number): AggregatedHistoryPoint[] {
+  if (!points.length) {
+    return [];
+  }
+
+  const bucketMs = bucketHours * 60 * 60 * 1000;
+  const buckets = new Map<number, AggregatedHistoryPoint>();
+
+  for (const point of points) {
+    const date = parsePointDate(point.timestamp);
+    const bucketStartMs = Math.floor(date.getTime() / bucketMs) * bucketMs;
+    const bucketStart = new Date(bucketStartMs);
+    const bucketEnd = new Date(bucketStartMs + bucketMs - 1);
+    const existing = buckets.get(bucketStartMs);
+
+    if (!existing) {
+      buckets.set(bucketStartMs, {
+        timestamp: formatBucketText(bucketStart),
+        lightIntensity: point.lightIntensity,
+        lampStatus: point.lampStatus,
+        min: point.lightIntensity,
+        max: point.lightIntensity,
+        sampleCount: 1,
+        lampOnRatio: point.lampStatus === "ON" ? 100 : 0,
+        spanLabel: formatSpanLabel(bucketStart, bucketEnd),
+      });
+      continue;
+    }
+
+    const nextCount = existing.sampleCount + 1;
+    const lampOnCount = Math.round((existing.lampOnRatio / 100) * existing.sampleCount) + (point.lampStatus === "ON" ? 1 : 0);
+    existing.lightIntensity = Math.round(
+      (existing.lightIntensity * existing.sampleCount + point.lightIntensity) / nextCount,
+    );
+    existing.min = Math.min(existing.min, point.lightIntensity);
+    existing.max = Math.max(existing.max, point.lightIntensity);
+    existing.sampleCount = nextCount;
+    existing.lampOnRatio = Math.round((lampOnCount / nextCount) * 100);
+    existing.lampStatus = existing.lampOnRatio >= 50 ? "ON" : "OFF";
+  }
+
+  return Array.from(buckets.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([, value]) => value);
+}
+
+async function loadHistory() {
+  loading.value = true;
   currentPage.value = 1;
+  const now = new Date();
+  const start = new Date(now.getTime() - selectedRange.value * 24 * 60 * 60 * 1000);
+  try {
+    rawHistory.value = await getLightHistory(selectedDeviceId.value, {
+      startTime: formatApiDateTime(start),
+      endTime: formatApiDateTime(now),
+      limit: activeRange.value.limit,
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function selectDevice(id: number) {
+  selectedDeviceId.value = id;
+  await loadHistory();
+}
+
+async function selectRange(range: number) {
+  selectedRange.value = range;
+  await loadHistory();
 }
 
 onMounted(async () => {
   devices.value = await getDeviceList();
   if (!devices.value.length) {
-    allHistory.value = [];
+    rawHistory.value = [];
     return;
   }
 
   selectedDeviceId.value = devices.value[0].id;
-  allHistory.value = await getLightHistory(selectedDeviceId.value);
+  await loadHistory();
 });
 </script>
 

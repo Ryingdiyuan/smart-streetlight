@@ -1,9 +1,15 @@
 import { http } from "@/lib/http";
-import type { AgentMessage, AgentPromptOption } from "@/types/models";
+import type { AgentMessage, AgentPromptOption, AgentQuestionOptions } from "@/types/models";
 
 interface AgentChatResponse {
   answer?: string;
   content?: string;
+  source?: string;
+  related_device?: {
+    id: number;
+    device_code: string;
+    device_name: string;
+  } | null;
 }
 
 const builtinPrompts: AgentPromptOption[] = [
@@ -20,11 +26,25 @@ export async function getConversation(): Promise<AgentMessage[]> {
   return [];
 }
 
-export async function sendQuestion(question: string): Promise<AgentMessage> {
-  const response = await http.post<AgentChatResponse>("/agent/chat", { question });
+export async function sendQuestion(
+  question: string,
+  options: AgentQuestionOptions = {},
+): Promise<AgentMessage> {
+  const response = await http.post<AgentChatResponse>("/agent/chat", {
+    question,
+    ...(options.deviceId ? { device_id: options.deviceId } : {}),
+    ...(options.deviceCode ? { device_code: options.deviceCode } : {}),
+  });
+
+  const scopeHint = response.related_device
+    ? `\n\n提问范围：${response.related_device.device_code} ${response.related_device.device_name}`
+    : "";
+
   return {
     id: `assistant-${Date.now()}`,
     role: "assistant",
-    content: response.answer ?? response.content ?? "接口已返回，但当前没有可展示的回答内容。",
+    content:
+      (response.answer ?? response.content ?? "接口已返回，但当前没有可展示的回答内容。") +
+      scopeHint,
   };
 }

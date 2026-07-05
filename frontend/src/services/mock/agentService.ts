@@ -1,5 +1,5 @@
 import { mockAgentMessages, mockPromptOptions } from "@/mock/data";
-import type { AgentMessage, AgentPromptOption } from "@/types/models";
+import type { AgentMessage, AgentPromptOption, AgentQuestionOptions } from "@/types/models";
 
 function delay(ms = 220) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -15,11 +15,15 @@ export async function getConversation(): Promise<AgentMessage[]> {
   return structuredClone(mockAgentMessages);
 }
 
-export async function sendQuestion(question: string): Promise<AgentMessage> {
+export async function sendQuestion(
+  question: string,
+  options: AgentQuestionOptions = {},
+): Promise<AgentMessage> {
   await delay(260);
+  const scopeHint = options.deviceCode ? `（设备范围：${options.deviceCode}）` : "（系统范围）";
   return {
     id: `assistant-${Date.now()}`,
     role: "assistant",
-    content: `已收到问题：“${question}”。后续这里会替换成真实智能体接口返回内容。`,
+    content: `已收到问题：“${question}”${scopeHint}。后续这里会替换成真实智能体接口返回内容。`,
   };
 }

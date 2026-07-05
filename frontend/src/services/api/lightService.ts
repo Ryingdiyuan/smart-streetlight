@@ -9,6 +9,12 @@ import {
   mapLightHistoryPoint,
 } from "@/services/api/normalizers";
 
+export interface LightHistoryQueryOptions {
+  startTime?: string;
+  endTime?: string;
+  limit?: number;
+}
+
 async function getLatestLight(deviceId: number) {
   try {
     return await http.get<LightDataApiPayload>(`/devices/${deviceId}/latest-light`);
@@ -54,9 +60,26 @@ export async function getRealtimeLightReadings(): Promise<RealtimeLightReading[]
   });
 }
 
-export async function getLightHistory(deviceId: number): Promise<LightHistoryPoint[]> {
+export async function getLightHistory(
+  deviceId: number,
+  options: LightHistoryQueryOptions = {},
+): Promise<LightHistoryPoint[]> {
   try {
-    const history = await http.get<LightDataApiPayload[]>(`/devices/${deviceId}/light-history`);
+    const searchParams = new URLSearchParams();
+    if (options.startTime) {
+      searchParams.set("start_time", options.startTime);
+    }
+    if (options.endTime) {
+      searchParams.set("end_time", options.endTime);
+    }
+    if (options.limit) {
+      searchParams.set("limit", String(options.limit));
+    }
+
+    const query = searchParams.toString();
+    const history = await http.get<LightDataApiPayload[]>(
+      `/devices/${deviceId}/light-history${query ? `?${query}` : ""}`,
+    );
     return history.slice().reverse().map(mapLightHistoryPoint);
   } catch (error) {
     if (isHttpStatus(error, 404)) {

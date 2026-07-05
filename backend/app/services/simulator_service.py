@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import threading
 import time
@@ -373,7 +374,7 @@ class SimulatorManager:
     def _build_client(self) -> mqtt.Client:
         client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
-            client_id=f"{settings.mqtt_client_id}-simulator",
+            client_id=f"{settings.mqtt_client_id}-simulator-{os.getpid()}",
         )
         if settings.mqtt_username:
             client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
@@ -450,6 +451,7 @@ class SimulatorManager:
             return
 
         device_code = topic_parts[1]
+        device_id: int | None = None
         with self._lock:
             state = next(
                 (item for item in self._devices.values() if item.device_code == device_code),
@@ -458,6 +460,7 @@ class SimulatorManager:
             if state is None:
                 return
             state.apply_command(payload)
+            device_id = state.device_id
             self._logs.appendleft(
                 SimulatorLogEntry(
                     created_at=datetime.now(),
@@ -468,6 +471,32 @@ class SimulatorManager:
                     ),
                 )
             )
+        if device_id is not None:
+            self._publish_device_snapshot(device_id)
+
+    def _publish_device_snapshot(self, device_id: int) -> None:
+        with self._lock:
+            state = self._devices.get(device_id)
+            if state is None:
+                return
+
+            status_payload = state.build_status_payload()
+            telemetry_payload = state.build_telemetry_payload()
+            state.publish_count += 1
+            state.next_publish_monotonic = time.monotonic() + state.telemetry_interval_seconds
+            device_code = state.device_code
+
+        if self._publish_json(f"streetlight/{device_code}/status", status_payload):
+            with self._lock:
+                if device_id in self._devices:
+                    self._devices[device_id].last_status_at = datetime.now()
+
+        if self._publish_json(f"streetlight/{device_code}/telemetry", telemetry_payload):
+            with self._lock:
+                if device_id in self._devices:
+                    self._devices[device_id].last_telemetry_at = datetime.now()
+
+        self.append_log("INFO", f"设备 {device_code} 已根据控制命令立即上报最新状态")
 
     def _publish_json(self, topic: str, payload: dict[str, Any]) -> bool:
         if not settings.mqtt_enabled:

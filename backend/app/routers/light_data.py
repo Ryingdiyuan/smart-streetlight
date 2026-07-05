@@ -87,7 +87,7 @@ def get_latest_light_data(
 @router.get("/light-history", response_model=list[LightDataRead])
 def list_light_history(
     device_id: int,
-    limit: int = Query(default=20, ge=1, le=200),
+    limit: int = Query(default=20, ge=1, le=2000),
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     db: Session = Depends(get_db),
