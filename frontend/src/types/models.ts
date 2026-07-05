@@ -104,6 +104,11 @@ export interface AgentPromptOption {
   title: string;
 }
 
+export interface AgentQuestionOptions {
+  deviceId?: number;
+  deviceCode?: string;
+}
+
 export interface RealtimeLightReading {
   deviceId: number;
   deviceCode: string;

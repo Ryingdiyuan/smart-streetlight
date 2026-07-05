@@ -30,7 +30,6 @@
           >
             {{ option.label }}
           </button>
-          <button class="primary-button">新增设备</button>
         </div>
       </div>
 
@@ -82,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
@@ -95,6 +94,7 @@ const keyword = ref("");
 const statusFilter = ref<"all" | "online" | "offline">("all");
 const loading = ref(true);
 const loadError = ref("");
+let refreshTimer: number | undefined;
 
 const filterOptions = [
   { label: "全部", value: "all" as const },
@@ -138,7 +138,7 @@ const filteredDevices = computed(() => {
   });
 });
 
-onMounted(async () => {
+async function loadDevices() {
   loading.value = true;
   loadError.value = "";
 
@@ -150,6 +150,19 @@ onMounted(async () => {
       error instanceof Error ? `设备列表加载失败：${error.message}` : "设备列表加载失败";
   } finally {
     loading.value = false;
+  }
+}
+
+onMounted(async () => {
+  await loadDevices();
+  refreshTimer = window.setInterval(() => {
+    void loadDevices();
+  }, 3000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer !== undefined) {
+    window.clearInterval(refreshTimer);
   }
 });
 </script>

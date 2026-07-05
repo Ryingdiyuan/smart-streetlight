@@ -19,6 +19,16 @@
             <strong>当前模式</strong>
             <span>真实 `/api/agent/chat` 问答接口</span>
           </div>
+          <div class="summary-box simulator-filter">
+            <strong>提问范围</strong>
+            <select v-model="selectedDeviceCode">
+              <option value="">系统整体</option>
+              <option v-for="device in devices" :key="device.id" :value="device.deviceCode">
+                {{ device.deviceCode }} - {{ device.deviceName }}
+              </option>
+            </select>
+            <span>可指定设备提问；未选择时会尝试从问题中自动识别设备编码。</span>
+          </div>
           <div class="prompt-chip-list">
             <button
               v-for="prompt in promptOptions"
@@ -94,17 +104,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import PanelCard from "@/components/PanelCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import { getConversation, getPromptOptions, sendQuestion } from "@/services/agentService";
-import type { AgentMessage, AgentPromptOption } from "@/types/models";
+import { getDeviceList } from "@/services/deviceService";
+import type { AgentMessage, AgentPromptOption, Device } from "@/types/models";
 
 const promptOptions = ref<AgentPromptOption[]>([]);
 const messages = ref<AgentMessage[]>([]);
 const question = ref("");
 const isThinking = ref(false);
+const devices = ref<Device[]>([]);
+const selectedDeviceCode = ref("");
+
+const selectedDevice = computed(() =>
+  devices.value.find((device) => device.deviceCode === selectedDeviceCode.value) ?? null,
+);
 
 function usePrompt(prompt: string) {
   question.value = prompt;
@@ -114,28 +131,47 @@ function clearConversation() {
   messages.value = [];
 }
 
+function detectDeviceFromQuestion(currentQuestion: string) {
+  const normalizedQuestion = currentQuestion.toUpperCase();
+  return (
+    devices.value.find((device) => normalizedQuestion.includes(device.deviceCode.toUpperCase())) ?? null
+  );
+}
+
 async function submitQuestion() {
   const currentQuestion = question.value.trim();
   if (!currentQuestion || isThinking.value) {
     return;
   }
 
+  const inferredDevice = selectedDevice.value ?? detectDeviceFromQuestion(currentQuestion);
+
   messages.value.push({
     id: `user-${Date.now()}`,
     role: "user",
-    content: currentQuestion,
+    content: inferredDevice
+      ? `${currentQuestion}\n\n提问范围：${inferredDevice.deviceCode} ${inferredDevice.deviceName}`
+      : currentQuestion,
   });
 
   isThinking.value = true;
-  const answer = await sendQuestion(currentQuestion);
+  const answer = await sendQuestion(currentQuestion, {
+    deviceId: inferredDevice?.id,
+    deviceCode: inferredDevice?.deviceCode,
+  });
   messages.value.push(answer);
   isThinking.value = false;
   question.value = "";
 }
 
 onMounted(async () => {
-  const [prompts, conversation] = await Promise.all([getPromptOptions(), getConversation()]);
+  const [prompts, conversation, deviceList] = await Promise.all([
+    getPromptOptions(),
+    getConversation(),
+    getDeviceList().catch(() => []),
+  ]);
   promptOptions.value = prompts;
   messages.value = conversation;
+  devices.value = deviceList;
 });
 </script>

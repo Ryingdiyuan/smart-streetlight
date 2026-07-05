@@ -17,6 +17,60 @@ SYSTEM_PROMPT = """你是智慧路灯节能系统的运维问答助手。
 回答要简洁，适合项目演示和运维人员阅读。
 优先用中文回答。"""
 
+OFFLINE_KEYWORDS = ("离线", "在线", "心跳", "status", "断连", "掉线")
+THRESHOLD_KEYWORDS = ("阈值", "开灯", "关灯", "光照", "亮度", "lux", "telemetry")
+CONTROL_KEYWORDS = ("控制", "命令", "响应", "执行", "turn_on", "turn_off", "brightness")
+ALARM_KEYWORDS = ("告警", "报警", "异常", "offline alarm")
+GREETING_WORDS = (
+    "你好",
+    "您好",
+    "hello",
+    "hi",
+    "嗨",
+    "在吗",
+    "你是谁",
+    "你能做什么",
+    "你可以做什么",
+)
+
+
+def contains_any_keyword(question: str, keywords: tuple[str, ...]) -> bool:
+    normalized_question = question.lower()
+    return any(keyword.lower() in normalized_question for keyword in keywords)
+
+
+def is_small_talk_question(question: str) -> bool:
+    normalized_question = question.strip().lower()
+    if not normalized_question:
+        return False
+
+    direct_matches = {
+        "你好",
+        "您好",
+        "hello",
+        "hi",
+        "嗨",
+        "在吗",
+        "你是谁",
+        "你能做什么",
+        "你可以做什么",
+    }
+    if normalized_question in direct_matches:
+        return True
+
+    return (
+        len(normalized_question) <= 12
+        and contains_any_keyword(normalized_question, GREETING_WORDS)
+    )
+
+
+def build_small_talk_answer() -> str:
+    return (
+        "你好，我是智慧路灯系统的运维问答助手。"
+        "我可以帮你分析设备离线、告警、光照阈值、控制记录和指定设备状态。"
+        "例如你可以问：SL-001 为什么离线？或 当前系统有哪些告警需要处理？"
+    )
+
 
 def describe_light_with_threshold(context: dict[str, Any]) -> str:
     latest = context.get("latest_light")
@@ -78,34 +132,83 @@ def describe_control_logs(context: dict[str, Any]) -> str:
     )
 
 
-def build_mock_answer(question: str, context: dict[str, Any]) -> str:
-    if context["scope"] == "device":
-        device = context["device"]
-        parts = [
-            f"{device['device_code']} 当前状态为 {device['status']}。",
-        ]
-        if device.get("last_heartbeat_at"):
-            parts.append(f"最近一次心跳时间为 {device['last_heartbeat_at']}。")
+def build_device_specific_answer(question: str, context: dict[str, Any]) -> str:
+    device = context["device"]
+    parts = [f"{device['device_code']} 当前状态为 {device['status']}。"]
+    if device.get("last_heartbeat_at"):
+        parts.append(f"最近一次心跳时间为 {device['last_heartbeat_at']}。")
 
-        parts.append(describe_light_with_threshold(context))
+    if contains_any_keyword(question, OFFLINE_KEYWORDS):
         parts.append(describe_device_alarms(context))
-        parts.append(describe_control_logs(context))
-
         if device["status"] == "offline":
-            parts.append("设备当前离线，建议优先排查供电、网络、设备网关和心跳程序。")
+            parts.append("该问题重点在离线排查，建议优先检查供电、网络、设备网关和 MQTT status 心跳上报程序。")
         else:
-            parts.append("设备当前在线，建议结合光照趋势、阈值配置和最近控制记录继续判断。")
+            parts.append("设备当前在线，若仍怀疑离线异常，建议重点检查心跳是否间歇性丢失。")
         return "".join(parts)
 
+    if contains_any_keyword(question, THRESHOLD_KEYWORDS):
+        parts.append(describe_light_with_threshold(context))
+        parts.append("如果要继续验证阈值是否合理，建议结合历史光照曲线和现场环境时段做调整。")
+        return "".join(parts)
+
+    if contains_any_keyword(question, CONTROL_KEYWORDS):
+        parts.append(describe_control_logs(context))
+        parts.append("如果命令记录显示 success 但现场设备未响应，建议检查 MQTT command 订阅、设备端执行逻辑和 reply 回传。")
+        return "".join(parts)
+
+    if contains_any_keyword(question, ALARM_KEYWORDS):
+        parts.append(describe_device_alarms(context))
+        parts.append("建议先确认最新一条告警的类型、是否已处理，以及它与最近心跳和控制记录是否有关联。")
+        return "".join(parts)
+
+    parts.append(describe_light_with_threshold(context))
+    parts.append(describe_device_alarms(context))
+    parts.append(describe_control_logs(context))
+    if device["status"] == "offline":
+        parts.append("设备当前离线，建议优先排查供电、网络、设备网关和心跳程序。")
+    else:
+        parts.append("设备当前在线，建议结合光照趋势、阈值配置和最近控制记录继续判断。")
+    return "".join(parts)
+
+
+def build_system_specific_answer(question: str, context: dict[str, Any]) -> str:
     stats = context["device_stats"]
     unhandled = context["unhandled_alarm_count"]
     if stats["device_count"] == 0:
         return "当前系统还没有设备数据，无法判断运行情况。建议先创建设备并上报光照或心跳数据。"
 
     parts = [
-        f"当前系统共有 {stats['device_count']} 台设备，在线 {stats['online_count']} 台，"
-        f"离线 {stats['offline_count']} 台，未处理告警 {unhandled} 条。"
+        f"当前系统共有 {stats['device_count']} 台设备，在线 {stats['online_count']} 台，离线 {stats['offline_count']} 台，未处理告警 {unhandled} 条。"
     ]
+
+    if contains_any_keyword(question, OFFLINE_KEYWORDS):
+        if stats["offline_count"] > 0:
+            parts.append("当前系统存在离线设备，建议先按设备列表筛出离线设备，再检查供电、网络、网关和 MQTT status 心跳上报。")
+        else:
+            parts.append("当前系统没有离线设备；如果要排查单台设备，建议在提问时指定设备编码。")
+        return "".join(parts)
+
+    if contains_any_keyword(question, ALARM_KEYWORDS):
+        if unhandled > 0:
+            parts.append("当前存在未处理告警，建议进入告警列表优先查看最近告警并按设备逐一确认原因。")
+        else:
+            parts.append("当前没有未处理告警；如果要分析单台设备的异常，建议指定设备编码继续提问。")
+        return "".join(parts)
+
+    if contains_any_keyword(question, CONTROL_KEYWORDS):
+        if context.get("recent_control_logs"):
+            latest_log = context["recent_control_logs"][0]
+            parts.append(
+                f"最近一条控制记录为 {latest_log['command']}，结果为 {latest_log['result']}。如需定位具体设备，请在问题中带上设备编码。"
+            )
+        else:
+            parts.append("当前没有查到最近控制记录。")
+        return "".join(parts)
+
+    if contains_any_keyword(question, THRESHOLD_KEYWORDS):
+        parts.append("阈值和光照建议更依赖单台设备的最新光照、阈值配置和历史趋势。建议指定设备编码后再提问。")
+        return "".join(parts)
+
     if stats["offline_count"] > 0:
         parts.append("建议优先关注离线设备，检查供电、网络、网关和 MQTT 心跳上报。")
     if unhandled > 0:
@@ -120,6 +223,13 @@ def build_mock_answer(question: str, context: dict[str, Any]) -> str:
     if stats["offline_count"] == 0 and unhandled == 0:
         parts.append("系统整体状态较稳定，建议继续观察 telemetry 和 status 上报是否持续正常。")
     return "".join(parts)
+
+
+def build_mock_answer(question: str, context: dict[str, Any]) -> str:
+    if context["scope"] == "device":
+        return build_device_specific_answer(question, context)
+
+    return build_system_specific_answer(question, context)
 
 
 def build_fallback_answer(question: str, context: dict[str, Any], reason: str) -> str:
@@ -188,6 +298,9 @@ def call_openai_compatible_chat(question: str, context: dict[str, Any]) -> str:
 
 
 def generate_agent_answer(question: str, context: dict[str, Any]) -> tuple[str, str]:
+    if is_small_talk_question(question):
+        return build_small_talk_answer(), "mock"
+
     if not settings.llm_enabled:
         return build_mock_answer(question, context), "mock"
 
