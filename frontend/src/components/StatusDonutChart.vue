@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import VChart from "vue-echarts";
 import { use } from "echarts/core";
 import { PieChart } from "echarts/charts";
@@ -43,6 +43,23 @@ const props = defineProps<{
   lampOffCount: number;
 }>();
 
+const theme = ref(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+let themeObserver: MutationObserver | null = null;
+
+onMounted(() => {
+  themeObserver = new MutationObserver(() => {
+    theme.value = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+});
+
+onUnmounted(() => {
+  themeObserver?.disconnect();
+});
+
 function buildOption(
   totalText: string,
   totalLabel: string,
@@ -50,66 +67,70 @@ function buildOption(
   legendData: string[],
   data: Array<{ value: number; name: string; itemStyle: { color: string } }>,
 ) {
+  const isLight = theme.value === "light";
+
   return {
-  backgroundColor: "transparent",
-  tooltip: {
-    trigger: "item",
-  },
-  legend: {
-    bottom: 4,
-    icon: "roundRect",
-    itemWidth: 14,
-    itemHeight: 10,
-    textStyle: {
-      color: "#cbd5e1",
+    backgroundColor: "transparent",
+    tooltip: {
+      trigger: "item",
     },
-    data: legendData,
-  },
-  graphic: [
-    {
-      type: "text",
-      left: "center",
-      top: "36%",
-      style: {
-        text: totalText,
-        fill: "#e2e8f0",
-        fontSize: 24,
-        fontWeight: 700,
-        textAlign: "center",
+    legend: isLight
+      ? { show: false }
+      : {
+          bottom: 4,
+          icon: "roundRect",
+          itemWidth: 14,
+          itemHeight: 10,
+          textStyle: {
+            color: "#cbd5e1",
+          },
+          data: legendData,
+        },
+    graphic: [
+      {
+        type: "text",
+        left: "center",
+        top: isLight ? "44%" : "36%",
+        style: {
+          text: totalText,
+          fill: isLight ? "#172033" : "#e2e8f0",
+          fontSize: 24,
+          fontWeight: 700,
+          textAlign: "center",
+        },
       },
-    },
-    {
-      type: "text",
-      left: "center",
-      top: "48%",
-      style: {
-        text: totalLabel,
-        fill: "#94a3b8",
-        fontSize: 13,
-        textAlign: "center",
+      {
+        type: "text",
+        left: "center",
+        top: isLight ? "55%" : "48%",
+        style: {
+          text: totalLabel,
+          fill: isLight ? "#475569" : "#94a3b8",
+          fontSize: 13,
+          textAlign: "center",
+        },
       },
-    },
-  ],
-  series: [
-    {
-      name: seriesName,
-      type: "pie",
-      radius: ["48%", "72%"],
-      center: ["50%", "40%"],
-      avoidLabelOverlap: true,
-      label: {
-        show: false,
+    ],
+    series: [
+      {
+        name: seriesName,
+        type: "pie",
+        radius: isLight ? ["56%", "78%"] : ["48%", "72%"],
+        center: isLight ? ["50%", "50%"] : ["50%", "40%"],
+        avoidLabelOverlap: true,
+        label: {
+          show: false,
+        },
+        labelLine: {
+          show: false,
+        },
+        itemStyle: {
+          borderColor: isLight ? "transparent" : "#0f172a",
+          borderWidth: isLight ? 0 : 4,
+        },
+        data,
       },
-      labelLine: {
-        show: false,
-      },
-      itemStyle: {
-        borderColor: "#0f172a",
-        borderWidth: 4,
-      },
-      data,
-    },
-  ],
+    ],
   };
 }
 
