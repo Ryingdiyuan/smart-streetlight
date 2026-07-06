@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.user import UserRole
+
 
 class InitAdminRequest(BaseModel):
     username: str
@@ -14,7 +16,7 @@ class LoginRequest(BaseModel):
 class UserRead(BaseModel):
     id: int
     username: str
-    role: str
+    role: UserRole
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -23,7 +25,7 @@ class UserRead(BaseModel):
 class TokenUser(BaseModel):
     id: int
     username: str
-    role: str
+    role: UserRole
 
     model_config = ConfigDict(from_attributes=True)
 

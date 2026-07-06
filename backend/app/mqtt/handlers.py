@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.models.alarm_log import AlarmLog
 from app.models.device import Device
 from app.models.light_data import LightData
 from app.services.auto_control import evaluate_auto_control
@@ -97,6 +98,24 @@ def handle_status_payload(payload: dict[str, Any], db: Session) -> None:
     is_online = parse_online_status(payload.get("online"))
     device.status = "online" if is_online else "offline"
     device.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
+
+    if is_online:
+        (
+            db.query(AlarmLog)
+            .filter(
+                AlarmLog.device_id == device.id,
+                AlarmLog.alarm_type == "offline",
+                AlarmLog.handled.is_(False),
+            )
+            .update(
+                {
+                    AlarmLog.handled: True,
+                    AlarmLog.handled_at: datetime.utcnow(),
+                },
+                synchronize_session=False,
+            )
+        )
+
     db.commit()
     db.refresh(device)
     logger.info("Updated device status from MQTT status topic: %s -> %s", device_code, device.status)

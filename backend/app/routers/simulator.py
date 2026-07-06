@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import require_admin, require_viewer_or_above
+from app.core.security import require_admin
 from app.models.device import Device
 from app.mqtt.client import mqtt_client
 from app.routers.devices import ensure_device_code_unique, get_device_or_404
@@ -42,7 +42,7 @@ def restart_backend_mqtt_client() -> None:
 
 @router.get("/config", response_model=SimulatorConfigRead)
 def get_simulator_config(
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_admin),
 ) -> dict:
     return simulator_manager.get_config_snapshot()
 
@@ -66,7 +66,7 @@ def update_simulator_config(
 @router.get("/devices", response_model=list[SimulatorDeviceRead])
 def get_simulator_devices(
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_admin),
 ) -> list[dict]:
     return sync_devices_snapshot(db)
 
@@ -185,7 +185,7 @@ def delete_simulator_device(
 def get_simulator_logs(
     limit: int = Query(default=120, ge=1, le=400),
     level: str | None = Query(default=None),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_admin),
 ) -> list[dict]:
     return simulator_manager.get_logs(limit=limit, level=level)
 
