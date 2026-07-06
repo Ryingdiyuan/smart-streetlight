@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.routers import agent, alarms, auth, commands, devices, health, light_data, simulator, thresholds
+from app.routers import agent, alarms, auth, commands, devices, health, light_data, simulator, thresholds, users
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -12,3 +12,4 @@ api_router.include_router(alarms.router)
 api_router.include_router(agent.router)
 api_router.include_router(auth.router)
 api_router.include_router(simulator.router)
+api_router.include_router(users.router)

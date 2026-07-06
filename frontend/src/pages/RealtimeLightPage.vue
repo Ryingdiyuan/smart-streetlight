@@ -111,10 +111,10 @@ const stats = computed<DashboardStat[]>(() => {
 });
 
 function intensityColor(val: number): string {
-  if (val < 80) return "#fca5a5";
-  if (val < 180) return "#fde68a";
-  if (val < 300) return "#86efac";
-  return "#7dd3fc";
+  if (val < 80) return "#dc2626";
+  if (val < 180) return "#ca8a04";
+  if (val < 300) return "#16a34a";
+  return "#0284c7";
 }
 
 function barWidth(val: number): string {
@@ -124,9 +124,9 @@ function barWidth(val: number): string {
 
 function intensityGradient(val: number): string {
   if (val < 80) return "linear-gradient(90deg, #ef4444, #f97316)";
-  if (val < 180) return "linear-gradient(90deg, #eab308, #fde68a)";
-  if (val < 300) return "linear-gradient(90deg, #22c55e, #86efac)";
-  return "linear-gradient(90deg, #0ea5e9, #7dd3fc)";
+  if (val < 180) return "linear-gradient(90deg, #ca8a04, #facc15)";
+  if (val < 300) return "linear-gradient(90deg, #16a34a, #4ade80)";
+  return "linear-gradient(90deg, #0284c7, #38bdf8)";
 }
 
 async function fetchReadings() {
@@ -160,15 +160,15 @@ onUnmounted(() => {
   display: grid;
   gap: 16px;
   transition: border-color 0.3s ease;
-  border-color: rgba(148, 163, 184, 0.14);
+  border-color: var(--border-soft);
 }
 
 .light-card:hover {
-  border-color: rgba(96, 165, 250, 0.4);
+  border-color: var(--border-bright);
 }
 
 .is-offline-card {
-  opacity: 0.6;
+  border-color: rgba(239, 68, 68, 0.32);
 }
 
 .light-card-header {
@@ -180,12 +180,12 @@ onUnmounted(() => {
 
 .light-card-header strong {
   font-size: 16px;
-  color: #e2e8f0;
+  color: var(--text-main);
 }
 
 .light-card-meta {
   margin: 4px 0 0;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -215,14 +215,14 @@ onUnmounted(() => {
 }
 
 .light-unit {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 16px;
 }
 
 .light-bar-track {
   height: 10px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(100, 116, 139, 0.28);
   overflow: hidden;
 }
 
@@ -235,7 +235,7 @@ onUnmounted(() => {
 .light-bar-labels {
   display: flex;
   justify-content: space-between;
-  color: #475569;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -244,17 +244,17 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
-  color: #64748b;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .update-label {
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .update-time {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 

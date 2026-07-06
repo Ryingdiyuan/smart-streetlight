@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import require_operator_or_admin, require_viewer_or_above
+from app.core.security import require_maintainer_or_admin, require_user_or_above
 from app.models.device import Device
 from app.models.threshold_config import ThresholdConfig
 from app.schemas.threshold_config import ThresholdConfigRead, ThresholdConfigUpdate
@@ -26,7 +26,7 @@ def ensure_device_exists(db: Session, device_id: int) -> None:
 def get_threshold_config(
     device_id: int,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_user_or_above),
 ) -> ThresholdConfig:
     ensure_device_exists(db, device_id)
     return get_or_create_threshold_config(db, device_id)
@@ -37,7 +37,7 @@ def update_threshold_config(
     device_id: int,
     threshold_update: ThresholdConfigUpdate,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_operator_or_admin),
+    _current_user: object = Depends(require_maintainer_or_admin),
 ) -> ThresholdConfig:
     ensure_device_exists(db, device_id)
 

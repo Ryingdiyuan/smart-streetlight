@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import require_admin, require_viewer_or_above
+from app.core.security import require_admin, require_user_or_above
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
 
@@ -38,7 +38,7 @@ def ensure_device_code_unique(
 @router.get("", response_model=list[DeviceRead])
 def list_devices(
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_user_or_above),
 ) -> list[Device]:
     return db.query(Device).order_by(Device.id.asc()).all()
 
@@ -47,7 +47,7 @@ def list_devices(
 def get_device(
     device_id: int,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_user_or_above),
 ) -> Device:
     return get_device_or_404(db, device_id)
 

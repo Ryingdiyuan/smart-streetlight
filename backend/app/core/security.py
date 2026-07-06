@@ -116,8 +116,8 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def require_operator_or_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in {"admin", "operator"}:
+def require_maintainer_or_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in {"admin", "maintainer"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要运维人员或管理员权限",
@@ -125,8 +125,8 @@ def require_operator_or_admin(current_user: User = Depends(get_current_user)) ->
     return current_user
 
 
-def require_viewer_or_above(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in {"admin", "operator", "viewer"}:
+def require_user_or_above(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in {"admin", "maintainer", "user"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="用户角色不合法",
