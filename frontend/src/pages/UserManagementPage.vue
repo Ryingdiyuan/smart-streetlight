@@ -22,7 +22,9 @@
           <label>
             <span>角色</span>
             <select v-model="createForm.role" class="search-input">
-              <option v-for="role in allRoles" :key="role" :value="role">{{ roleLabels[role] }}</option>
+              <option v-for="role in allRoles" :key="role" :value="role">
+                {{ roleLabels[role] }}
+              </option>
             </select>
           </label>
           <label class="checkbox-field">
@@ -74,10 +76,14 @@
           <tbody>
             <tr v-for="user in users" :key="user.id">
               <td>{{ user.id }}</td>
-              <td><input v-model.trim="editForms[user.id].username" class="search-input table-input" type="text" /></td>
+              <td>
+                <input v-model.trim="editForms[user.id].username" class="search-input table-input" type="text" />
+              </td>
               <td>
                 <select v-model="editForms[user.id].role" class="search-input table-input">
-                  <option v-for="role in allRoles" :key="role" :value="role">{{ roleLabels[role] }}</option>
+                  <option v-for="role in allRoles" :key="role" :value="role">
+                    {{ roleLabels[role] }}
+                  </option>
                 </select>
               </td>
               <td>
@@ -95,7 +101,12 @@
                 />
               </td>
               <td>
-                <button class="primary-button" type="button" :disabled="savingUserId === user.id" @click="handleUpdateUser(user.id)">
+                <button
+                  class="primary-button"
+                  type="button"
+                  :disabled="savingUserId === user.id"
+                  @click="handleUpdateUser(user.id)"
+                >
                   {{ savingUserId === user.id ? "保存中..." : "保存" }}
                 </button>
               </td>
@@ -143,6 +154,7 @@ const editForms = reactive<Record<number, UserEditForm>>({});
 
 function getErrorMessage(error: unknown) {
   if (!(error instanceof Error)) return "操作失败，请稍后重试";
+
   try {
     const parsed = JSON.parse(error.message) as { detail?: string };
     return parsed.detail || error.message;
@@ -181,6 +193,7 @@ async function handleCreateUser() {
     message.value = "请输入用户名和初始密码";
     return;
   }
+
   saving.value = true;
   message.value = "";
   try {
@@ -204,6 +217,7 @@ async function handleUpdateUser(userId: number) {
     message.value = "用户名不能为空";
     return;
   }
+
   savingUserId.value = userId;
   message.value = "";
   try {

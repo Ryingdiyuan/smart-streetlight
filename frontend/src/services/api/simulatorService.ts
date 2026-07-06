@@ -22,6 +22,7 @@ interface SimulatorDevicePayload {
   location: string | null;
   running: boolean;
   online: boolean;
+  system_status: "online" | "offline";
   lamp_status: "on" | "off";
   brightness: number;
   base_light: number;
@@ -100,6 +101,7 @@ function mapDevice(payload: SimulatorDevicePayload): SimulatorDevice {
     location: normalizeText(payload.location),
     running: payload.running,
     online: payload.online,
+    systemStatus: payload.system_status === "online" ? "online" : "offline",
     lampStatus: payload.lamp_status,
     brightness: payload.brightness,
     baseLight: payload.base_light,

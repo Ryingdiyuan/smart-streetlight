@@ -48,6 +48,7 @@ class SimulatorDeviceRead(BaseModel):
     location: str | None = None
     running: bool
     online: bool
+    system_status: str
     lamp_status: str
     brightness: int
     base_light: int

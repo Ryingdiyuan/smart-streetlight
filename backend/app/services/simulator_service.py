@@ -72,6 +72,7 @@ class SimulatorDeviceState:
     last_status_at: datetime | None = None
     last_command_at: datetime | None = None
     last_command: str | None = None
+    system_status: str = "offline"
     next_publish_monotonic: float = 0.0
 
     def apply_defaults(self) -> None:
@@ -129,6 +130,7 @@ class SimulatorDeviceState:
             "location": self.location,
             "running": self.running,
             "online": self.online,
+            "system_status": self.system_status,
             "lamp_status": self.lamp_status,
             "brightness": self.brightness,
             "base_light": self.base_light,
@@ -258,6 +260,7 @@ class SimulatorManager:
                         device_code=device.device_code,
                         device_name=device.device_name,
                         location=device.location,
+                        system_status=device.status or "offline",
                     )
                     state.apply_defaults()
                     self._devices[device.id] = state
@@ -265,6 +268,7 @@ class SimulatorManager:
                     state.device_code = device.device_code
                     state.device_name = device.device_name
                     state.location = device.location
+                    state.system_status = device.status or "offline"
                     state.apply_defaults()
 
             removed_ids = [item_id for item_id in self._devices if item_id not in valid_ids]
@@ -286,6 +290,7 @@ class SimulatorManager:
                     device_code=device.device_code,
                     device_name=device.device_name,
                     location=device.location,
+                    system_status=device.status or "offline",
                 )
                 self._devices[device.id] = state
             else:
@@ -293,6 +298,7 @@ class SimulatorManager:
                 state.device_name = device.device_name
                 state.location = device.location
 
+            state.system_status = device.status or "offline"
             state.apply_defaults()
             return state.to_dict()
 
@@ -316,12 +322,14 @@ class SimulatorManager:
                     device_code=device.device_code,
                     device_name=device.device_name,
                     location=device.location,
+                    system_status=device.status or "offline",
                 )
                 self._devices[device.id] = state
 
             state.device_code = device.device_code
             state.device_name = device.device_name
             state.location = device.location
+            state.system_status = device.status or "offline"
 
             if running is not None:
                 state.running = running

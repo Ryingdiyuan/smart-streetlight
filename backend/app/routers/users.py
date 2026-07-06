@@ -12,16 +12,27 @@ router = APIRouter(prefix="/users", tags=["users"])
 def get_user_or_404(db: Session, user_id: int) -> User:
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在",
+        )
     return user
 
 
-def ensure_username_unique(db: Session, username: str, exclude_id: int | None = None) -> None:
+def ensure_username_unique(
+    db: Session,
+    username: str,
+    exclude_id: int | None = None,
+) -> None:
     query = db.query(User).filter(User.username == username)
     if exclude_id is not None:
         query = query.filter(User.id != exclude_id)
+
     if query.first() is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名已存在",
+        )
 
 
 def active_admin_count(db: Session, exclude_id: int | None = None) -> int:
@@ -34,16 +45,24 @@ def active_admin_count(db: Session, exclude_id: int | None = None) -> int:
 def ensure_not_last_active_admin(db: Session, user: User, update_data: dict) -> None:
     if user.role != "admin" or not user.is_active:
         return
+
     next_role = update_data.get("role", user.role)
     next_active = update_data.get("is_active", user.is_active)
     if next_role == "admin" and next_active:
         return
+
     if active_admin_count(db, exclude_id=user.id) == 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能禁用或降级最后一个可用管理员")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能禁用或降级最后一个可用管理员",
+        )
 
 
 @router.get("", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db), _current_user: User = Depends(require_admin)) -> list[User]:
+def list_users(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
+) -> list[User]:
     return db.query(User).order_by(User.id.asc()).all()
 
 
@@ -80,10 +99,13 @@ def update_user(
     if "username" in update_data:
         ensure_username_unique(db, update_data["username"], exclude_id=user_id)
         user.username = update_data["username"]
+
     if update_data.get("password"):
         user.password_hash = hash_password(update_data["password"])
+
     if "role" in update_data:
         user.role = update_data["role"]
+
     if "is_active" in update_data:
         user.is_active = update_data["is_active"]
 

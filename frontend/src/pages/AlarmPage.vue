@@ -5,14 +5,14 @@
         <p class="section-kicker">Alarms</p>
         <h3>告警日志</h3>
       </div>
-      <p class="section-note">告警列表已接入真实接口，可继续扩展处理动作与详情联动。</p>
+      <p class="section-note">告警确认表示人工已知晓或已处置记录，不会直接改变设备在线状态；设备在线状态由心跳自动判断。</p>
     </header>
 
     <div class="stats-grid">
       <StatCard v-for="item in summaryStats" :key="item.label" :stat="item" />
     </div>
 
-    <PanelCard title="告警筛选与列表" subtitle="支持按处理状态和级别查看">
+    <PanelCard title="告警筛选与列表" subtitle="支持按确认状态和级别查看">
       <div class="toolbar-row">
         <div class="toolbar-actions">
           <button
@@ -47,9 +47,9 @@
               <th>类型</th>
               <th>级别</th>
               <th>内容</th>
-              <th>处理状态</th>
+              <th>确认状态</th>
               <th>时间</th>
-              <th>操作</th>
+              <th v-if="canHandleAlarms">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -59,7 +59,7 @@
               <td>{{ alarm.alarmType }}</td>
               <td>
                 <StatusBadge
-                  :status="alarm.alarmLevel === 'CRITICAL' ? 'warning' : alarm.alarmLevel === 'WARN' ? 'warning' : 'info'"
+                  :status="alarm.alarmLevel === 'INFO' ? 'info' : 'warning'"
                   :text="alarm.alarmLevel"
                 />
               </td>
@@ -67,23 +67,23 @@
               <td>
                 <StatusBadge
                   :status="alarm.handled ? 'info' : 'warning'"
-                  :text="alarm.handled ? '已处理' : '未处理'"
+                  :text="alarm.handled ? '已确认' : '未确认'"
                 />
               </td>
               <td>{{ alarm.createdAt }}</td>
-              <td>
+              <td v-if="canHandleAlarms">
                 <button
                   class="ghost-button"
                   type="button"
                   :disabled="alarm.handled || handlingAlarmId === alarm.id"
                   @click="handleAlarmRecord(alarm.id)"
                 >
-                  {{ alarm.handled ? "已处理" : handlingAlarmId === alarm.id ? "处理中..." : "处理告警" }}
+                  {{ alarm.handled ? "已确认" : handlingAlarmId === alarm.id ? "确认中..." : "确认告警" }}
                 </button>
               </td>
             </tr>
             <tr v-if="!filteredAlarms.length">
-              <td colspan="8" class="table-empty">当前没有告警记录</td>
+              <td :colspan="canHandleAlarms ? 8 : 7" class="table-empty">当前没有告警记录</td>
             </tr>
           </tbody>
         </table>
@@ -99,17 +99,19 @@ import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import { getAlarmList, handleAlarm } from "@/services/alarmService";
+import { can } from "@/services/permissions";
 import type { AlarmLevel, AlarmRecord, DashboardStat } from "@/types/models";
 
 const alarms = ref<AlarmRecord[]>([]);
 const handledFilter = ref<"all" | "handled" | "unhandled">("all");
 const levelFilter = ref<"all" | AlarmLevel>("all");
 const handlingAlarmId = ref<string | null>(null);
+const canHandleAlarms = computed(() => can("handleAlarms"));
 
 const handledOptions = [
   { label: "全部状态", value: "all" as const },
-  { label: "已处理", value: "handled" as const },
-  { label: "未处理", value: "unhandled" as const },
+  { label: "已确认", value: "handled" as const },
+  { label: "未确认", value: "unhandled" as const },
 ];
 
 const levelOptions = [
@@ -120,9 +122,9 @@ const levelOptions = [
 ];
 
 const summaryStats = computed<DashboardStat[]>(() => [
-  { label: "告警总数", value: String(alarms.value.length), helper: "当前真实告警记录" },
+  { label: "告警总数", value: String(alarms.value.length), helper: "当前告警记录" },
   {
-    label: "未处理",
+    label: "未确认",
     value: String(alarms.value.filter((alarm) => !alarm.handled).length),
     helper: "建议优先关注",
   },
@@ -132,9 +134,9 @@ const summaryStats = computed<DashboardStat[]>(() => [
     helper: "离线和异常提示",
   },
   {
-    label: "已处理",
+    label: "已确认",
     value: String(alarms.value.filter((alarm) => alarm.handled).length),
-    helper: "便于演示处置结果",
+    helper: "人工确认完成数量",
   },
 ]);
 
@@ -156,7 +158,7 @@ onMounted(async () => {
 });
 
 async function handleAlarmRecord(alarmId: string) {
-  if (handlingAlarmId.value) {
+  if (handlingAlarmId.value || !canHandleAlarms.value) {
     return;
   }
 

@@ -96,7 +96,7 @@
           </label>
           <label class="checkbox-field">
             <input v-model="createForm.online" type="checkbox" />
-            <span>创建后默认在线</span>
+            <span>模拟上报 online=true</span>
           </label>
           <label class="checkbox-field">
             <input v-model="createForm.autoStart" type="checkbox" />
@@ -113,7 +113,7 @@
       </PanelCard>
     </div>
 
-    <PanelCard title="设备模拟列表" subtitle="根据数据库设备显示当前模拟状态与控制动作">
+    <PanelCard title="设备模拟列表" subtitle="运行状态表示是否发数据；模拟上报状态表示下一次发出的 online 值；系统设备状态来自设备列表的真实状态">
       <div v-if="refreshing && !devices.length" class="placeholder-box">正在加载模拟器设备...</div>
       <div v-else class="table-wrapper">
         <table>
@@ -123,7 +123,8 @@
               <th>设备名称</th>
               <th>位置</th>
               <th>运行状态</th>
-              <th>在线状态</th>
+              <th>模拟上报状态</th>
+              <th>系统设备状态</th>
               <th>当前光照</th>
               <th>灯状态</th>
               <th>间隔</th>
@@ -141,7 +142,13 @@
                 <StatusBadge :status="device.running ? 'success' : 'info'" :text="device.running ? '运行中' : '已停止'" />
               </td>
               <td>
-                <StatusBadge :status="device.online ? 'online' : 'offline'" :text="device.online ? '在线' : '离线'" />
+                <StatusBadge :status="device.online ? 'online' : 'offline'" :text="device.online ? '上报在线' : '上报离线'" />
+              </td>
+              <td>
+                <StatusBadge
+                  :status="device.systemStatus"
+                  :text="device.systemStatus === 'online' ? '系统在线' : '系统离线'"
+                />
               </td>
               <td>{{ device.currentLightIntensity }} lx</td>
               <td>{{ device.lampStatus.toUpperCase() }}</td>
@@ -183,7 +190,7 @@
               </td>
             </tr>
             <tr v-if="!devices.length">
-              <td colspan="11" class="table-empty">当前没有可管理的模拟设备</td>
+              <td colspan="12" class="table-empty">当前没有可管理的模拟设备</td>
             </tr>
           </tbody>
         </table>
@@ -266,7 +273,7 @@
           </label>
           <label class="checkbox-field">
             <input v-model="editForm.online" type="checkbox" />
-            <span>模拟在线状态</span>
+            <span>模拟上报 online=true</span>
           </label>
           <label class="checkbox-field">
             <input v-model="editForm.running" type="checkbox" />

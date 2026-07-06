@@ -139,6 +139,7 @@ export interface SimulatorDevice {
   location: string;
   running: boolean;
   online: boolean;
+  systemStatus: DeviceStatus;
   lampStatus: "on" | "off";
   brightness: number;
   baseLight: number;
