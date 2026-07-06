@@ -75,10 +75,12 @@ export interface LoginPayload {
   password: string;
 }
 
+export type UserRole = "admin" | "maintainer" | "user";
+
 export interface AuthUser {
   id: number;
   username: string;
-  role: string;
+  role: UserRole;
   is_active?: boolean;
 }
 
@@ -137,6 +139,7 @@ export interface SimulatorDevice {
   location: string;
   running: boolean;
   online: boolean;
+  systemStatus: DeviceStatus;
   lampStatus: "on" | "off";
   brightness: number;
   baseLight: number;

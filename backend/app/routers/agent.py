@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import require_viewer_or_above
+from app.core.security import require_user_or_above
 from app.schemas.agent import AgentChatRequest, AgentChatResponse, AgentRelatedDevice
 from app.services.agent_context import AgentContextError, build_agent_context
 from app.services.llm_client import generate_agent_answer
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 def chat_with_agent(
     request: AgentChatRequest,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_user_or_above),
 ) -> AgentChatResponse:
     question = request.question.strip()
     if not question:

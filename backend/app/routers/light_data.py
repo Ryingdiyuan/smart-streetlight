@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import require_operator_or_admin, require_viewer_or_above
+from app.core.security import require_maintainer_or_admin, require_user_or_above
 from app.models.device import Device
 from app.models.light_data import LightData
 from app.schemas.light_data import LightDataCreate, LightDataRead, LightDataWithAction
@@ -30,7 +30,7 @@ def create_light_data(
     device_id: int,
     light_data_create: LightDataCreate,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_operator_or_admin),
+    _current_user: object = Depends(require_maintainer_or_admin),
 ) -> dict:
     ensure_device_exists(db, device_id)
 
@@ -66,7 +66,7 @@ def create_light_data(
 def get_latest_light_data(
     device_id: int,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_user_or_above),
 ) -> LightData:
     ensure_device_exists(db, device_id)
 
@@ -91,7 +91,7 @@ def list_light_history(
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     db: Session = Depends(get_db),
-    _current_user: object = Depends(require_viewer_or_above),
+    _current_user: object = Depends(require_user_or_above),
 ) -> list[LightData]:
     ensure_device_exists(db, device_id)
 
