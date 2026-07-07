@@ -1,5 +1,6 @@
 import { mockDeviceDetails, mockDevices } from "@/mock/data";
 import type {
+  BatchCommandSummary,
   CommandLog,
   Device,
   DeviceDetail,
@@ -53,6 +54,101 @@ export async function sendDeviceCommand(
   }
 
   return structuredClone(newLog);
+}
+
+export async function sendBatchDeviceCommand(
+  deviceIds: number[],
+  command: "TURN_ON" | "TURN_OFF",
+): Promise<BatchCommandSummary> {
+  await delay();
+
+  const uniqueIds = [...new Set(deviceIds)];
+  const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
+  const results = uniqueIds.map((id, index) => {
+    const detail = mockDeviceDetails[id];
+    if (!detail) {
+      throw new Error(`设备不存在: ${id}`);
+    }
+
+    const newLog: CommandLog = {
+      id: `CMD-${Date.now()}-${index}`,
+      deviceId: detail.deviceCode,
+      command,
+      source: "manual",
+      result: "success",
+      createdAt,
+    };
+
+    detail.lampStatus = command === "TURN_ON" ? "ON" : "OFF";
+    detail.commandLogs = [newLog, ...detail.commandLogs];
+
+    const listItem = mockDevices.find((item) => item.id === id);
+    if (listItem) {
+      listItem.lampStatus = detail.lampStatus;
+    }
+
+    return {
+      deviceId: id,
+      deviceCode: detail.deviceCode,
+      result: "success" as const,
+      logId: newLog.id,
+      createdAt,
+    };
+  });
+
+  return structuredClone({
+    command,
+    total: uniqueIds.length,
+    successCount: uniqueIds.length,
+    failedCount: 0,
+    skippedCount: 0,
+    results,
+  });
+}
+
+export async function createDevice(data: {
+  device_code: string;
+  device_name: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+}): Promise<Device> {
+  await delay();
+
+  if (mockDevices.some((device) => device.deviceCode === data.device_code)) {
+    throw new Error("设备编码已存在");
+  }
+
+  const nextId = mockDevices.length ? Math.max(...mockDevices.map((device) => device.id)) + 1 : 1;
+  const createdDevice: Device = {
+    id: nextId,
+    deviceCode: data.device_code,
+    deviceName: data.device_name,
+    location: data.location ?? "-",
+    latitude: data.latitude,
+    longitude: data.longitude,
+    status: "offline",
+    lampStatus: "OFF",
+    lastHeartbeatAt: "--",
+  };
+
+  const createdDetail: DeviceDetail = {
+    ...createdDevice,
+    currentLightIntensity: 0,
+    threshold: {
+      deviceId: createdDevice.deviceCode,
+      lowThreshold: 100,
+      highThreshold: 300,
+      enabled: true,
+    },
+    history: [],
+    commandLogs: [],
+    alarms: [],
+  };
+
+  mockDevices.push(createdDevice);
+  mockDeviceDetails[nextId] = createdDetail;
+  return structuredClone(createdDevice);
 }
 
 export async function updateDevice(

@@ -5,6 +5,7 @@ export type Permission =
   | "viewDashboard"
   | "viewDevices"
   | "operateDevices"
+  | "manageDeviceRegistry"
   | "handleAlarms"
   | "viewAgent"
   | "manageSimulator"
@@ -23,6 +24,7 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     "viewDashboard",
     "viewDevices",
     "operateDevices",
+    "manageDeviceRegistry",
     "handleAlarms",
     "viewAgent",
     "manageSimulator",

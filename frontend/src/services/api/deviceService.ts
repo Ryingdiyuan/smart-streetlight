@@ -1,14 +1,22 @@
 import { http } from "@/lib/http";
-import type { CommandLog, Device, DeviceDetail, ThresholdConfig } from "@/types/models";
+import type {
+  BatchCommandSummary,
+  CommandLog,
+  Device,
+  DeviceDetail,
+  ThresholdConfig,
+} from "@/types/models";
 
 import {
   type AlarmApiPayload,
+  type BatchControlLogApiPayload,
   type ControlLogApiPayload,
   type DeviceApiPayload,
   type LightDataApiPayload,
   type ThresholdConfigApiPayload,
   isHttpStatus,
   mapAlarmPayload,
+  mapBatchCommandSummaryPayload,
   mapCommandLogPayload,
   mapDevicePayload,
   mapLampStatus,
@@ -131,6 +139,18 @@ export async function sendDeviceCommand(
   });
 
   return mapCommandLogPayload(payload);
+}
+
+export async function sendBatchDeviceCommand(
+  deviceIds: number[],
+  command: "TURN_ON" | "TURN_OFF",
+): Promise<BatchCommandSummary> {
+  const payload = await http.post<BatchControlLogApiPayload>("/devices/commands/batch", {
+    device_ids: deviceIds,
+    command,
+  });
+
+  return mapBatchCommandSummaryPayload(payload);
 }
 
 export interface CreateDevicePayload {

@@ -6,7 +6,7 @@
         <h3>传感器模拟控制台</h3>
       </div>
       <p class="section-note">
-        页面内直接管理 MQTT 模拟器，支持 Broker 配置、设备启停、参数编辑、新增删除和运行日志查看。
+        面向后续硬件接入与 MQTT 联调，保留 Broker 配置、模拟启停、参数编辑和运行日志。设备建档与业务入口已拆分到“软件设备中心”。
       </p>
     </header>
 
@@ -60,55 +60,22 @@
         </div>
       </PanelCard>
 
-      <PanelCard title="新增传感器" subtitle="新增设备并立即加入模拟器">
-        <div class="form-grid">
-          <label>
-            <span>设备编码</span>
-            <input v-model="createForm.deviceCode" type="text" placeholder="例如 SL-010" />
-          </label>
-          <label>
-            <span>设备名称</span>
-            <input v-model="createForm.deviceName" type="text" placeholder="例如 图书馆路灯" />
-          </label>
-          <label>
-            <span>安装位置</span>
-            <input v-model="createForm.location" type="text" placeholder="例如 图书馆门口" />
-          </label>
-          <label>
-            <span>基础光照</span>
-            <input v-model.number="createForm.baseLight" type="number" min="0" />
-          </label>
-          <label>
-            <span>波动范围</span>
-            <input v-model.number="createForm.variance" type="number" min="0" />
-          </label>
-          <label>
-            <span>基础电压</span>
-            <input v-model.number="createForm.voltageBase" type="number" step="0.1" />
-          </label>
-          <label>
-            <span>遥测间隔（秒）</span>
-            <input v-model.number="createForm.telemetryIntervalSeconds" type="number" min="1" />
-          </label>
-          <label>
-            <span>心跳轮次</span>
-            <input v-model.number="createForm.statusEvery" type="number" min="1" />
-          </label>
-          <label class="checkbox-field">
-            <input v-model="createForm.online" type="checkbox" />
-            <span>模拟上报 online=true</span>
-          </label>
-          <label class="checkbox-field">
-            <input v-model="createForm.autoStart" type="checkbox" />
-            <span>创建后立即开始模拟</span>
-          </label>
+      <PanelCard title="软件设备建档已分流" subtitle="业务设备创建、坐标录入与软件入口已迁移到新模块">
+        <div class="detail-tip-grid">
+          <div class="summary-box">
+            <span>软件设备中心</span>
+            <strong>负责设备建档与业务入口</strong>
+          </div>
+          <div class="summary-box">
+            <span>模拟器控制台</span>
+            <strong>负责 MQTT 模拟与联调验证</strong>
+          </div>
         </div>
 
         <div class="button-row simulator-actions-row">
-          <button class="primary-button" type="button" :disabled="creatingDevice" @click="handleCreateDevice">
-            {{ creatingDevice ? "新增中..." : "新增传感器" }}
-          </button>
-          <span class="inline-note">设备将同步写入数据库并进入下方控制表。</span>
+          <RouterLink class="primary-button" to="/software-devices">前往软件设备中心</RouterLink>
+          <RouterLink class="ghost-button" to="/devices">查看设备列表</RouterLink>
+          <span class="inline-note">新建设备档案后，会自动出现在下方模拟列表中用于后续联调。</span>
         </div>
       </PanelCard>
     </div>
@@ -302,7 +269,6 @@ import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import {
   clearSimulatorLogs,
-  createSimulatorDevice,
   deleteSimulatorDevice,
   getSimulatorConfig,
   getSimulatorDevices,
@@ -337,19 +303,6 @@ const configForm = reactive({
   password: "",
 });
 
-const createForm = reactive({
-  deviceCode: "",
-  deviceName: "",
-  location: "",
-  baseLight: 120,
-  variance: 35,
-  voltageBase: 220.5,
-  telemetryIntervalSeconds: 5,
-  statusEvery: 1,
-  online: true,
-  autoStart: true,
-});
-
 const editForm = reactive({
   deviceName: "",
   location: "",
@@ -367,7 +320,6 @@ const logs = ref<SimulatorLogEntry[]>([]);
 const refreshing = ref(false);
 const refreshingLogs = ref(false);
 const savingConfig = ref(false);
-const creatingDevice = ref(false);
 const clearingLogs = ref(false);
 const savingEdit = ref(false);
 const pendingDeviceId = ref<number | null>(null);
@@ -400,19 +352,6 @@ function syncConfigForm() {
   configForm.port = config.port;
   configForm.username = config.username;
   configForm.password = config.password;
-}
-
-function resetCreateForm() {
-  createForm.deviceCode = "";
-  createForm.deviceName = "";
-  createForm.location = "";
-  createForm.baseLight = 120;
-  createForm.variance = 35;
-  createForm.voltageBase = 220.5;
-  createForm.telemetryIntervalSeconds = 5;
-  createForm.statusEvery = 1;
-  createForm.online = true;
-  createForm.autoStart = true;
 }
 
 function fillEditForm(device: SimulatorDevice) {
@@ -470,35 +409,6 @@ async function handleSaveConfig() {
     window.alert(error instanceof Error ? error.message : "保存 Broker 配置失败");
   } finally {
     savingConfig.value = false;
-  }
-}
-
-async function handleCreateDevice() {
-  if (!createForm.deviceCode.trim() || !createForm.deviceName.trim()) {
-    window.alert("设备编码和设备名称不能为空");
-    return;
-  }
-
-  creatingDevice.value = true;
-  try {
-    await createSimulatorDevice({
-      deviceCode: createForm.deviceCode.trim(),
-      deviceName: createForm.deviceName.trim(),
-      location: createForm.location.trim(),
-      baseLight: Number(createForm.baseLight),
-      variance: Number(createForm.variance),
-      voltageBase: Number(createForm.voltageBase),
-      telemetryIntervalSeconds: Number(createForm.telemetryIntervalSeconds),
-      statusEvery: Number(createForm.statusEvery),
-      online: createForm.online,
-      autoStart: createForm.autoStart,
-    });
-    resetCreateForm();
-    await loadConsoleData();
-  } catch (error) {
-    window.alert(error instanceof Error ? error.message : "新增传感器失败");
-  } finally {
-    creatingDevice.value = false;
   }
 }
 

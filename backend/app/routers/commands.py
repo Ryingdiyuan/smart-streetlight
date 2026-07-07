@@ -10,9 +10,15 @@ from app.core.security import require_maintainer_or_admin, require_user_or_above
 from app.models.control_log import ControlLog
 from app.models.device import Device
 from app.mqtt.client import mqtt_client
-from app.schemas.control_log import ControlCommandCreate, ControlLogRead
+from app.schemas.control_log import (
+    BatchControlCommandCreate,
+    BatchControlLogItemRead,
+    BatchControlLogRead,
+    ControlCommandCreate,
+    ControlLogRead,
+)
 
-router = APIRouter(prefix="/devices/{device_id}/commands", tags=["commands"])
+router = APIRouter(prefix="/devices", tags=["commands"])
 
 ALLOWED_COMMANDS = {"TURN_ON", "TURN_OFF", "SET_BRIGHTNESS"}
 
@@ -57,16 +63,7 @@ def build_command_payload(command_create: ControlCommandCreate) -> dict:
     return payload
 
 
-@router.post("", response_model=ControlLogRead, status_code=status.HTTP_201_CREATED)
-def create_command(
-    device_id: int,
-    command_create: ControlCommandCreate,
-    db: Session = Depends(get_db),
-    _current_user: object = Depends(require_maintainer_or_admin),
-) -> ControlLog:
-    device = get_device_or_404(db, device_id)
-    payload = build_command_payload(command_create)
-
+def create_control_log(db: Session, device: Device, payload: dict) -> ControlLog:
     if not settings.mqtt_enabled:
         result = "skipped"
     else:
@@ -83,12 +80,79 @@ def create_command(
         reply_payload=None,
     )
     db.add(control_log)
+    db.flush()
+    return control_log
+
+
+@router.post("/{device_id}/commands", response_model=ControlLogRead, status_code=status.HTTP_201_CREATED)
+def create_command(
+    device_id: int,
+    command_create: ControlCommandCreate,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_maintainer_or_admin),
+) -> ControlLog:
+    device = get_device_or_404(db, device_id)
+    payload = build_command_payload(command_create)
+    control_log = create_control_log(db, device, payload)
     db.commit()
     db.refresh(control_log)
     return control_log
 
 
-@router.get("", response_model=list[ControlLogRead])
+@router.post("/commands/batch", response_model=BatchControlLogRead, status_code=status.HTTP_201_CREATED)
+def create_batch_command(
+    command_create: BatchControlCommandCreate,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_maintainer_or_admin),
+) -> BatchControlLogRead:
+    device_ids = list(dict.fromkeys(command_create.device_ids))
+    devices = db.query(Device).filter(Device.id.in_(device_ids)).all()
+    device_map = {device.id: device for device in devices}
+    missing_ids = [device_id for device_id in device_ids if device_id not in device_map]
+    if missing_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"以下设备不存在：{', '.join(map(str, missing_ids))}",
+        )
+
+    payload = build_command_payload(command_create)
+    results: list[BatchControlLogItemRead] = []
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    for device_id in device_ids:
+        device = device_map[device_id]
+        control_log = create_control_log(db, device, dict(payload))
+        if control_log.result == "success":
+            success_count += 1
+        elif control_log.result == "failed":
+            failed_count += 1
+        else:
+            skipped_count += 1
+
+        results.append(
+            BatchControlLogItemRead(
+                device_id=device.id,
+                device_code=device.device_code,
+                result=control_log.result,
+                log_id=control_log.id,
+                created_at=control_log.created_at,
+            )
+        )
+
+    db.commit()
+    return BatchControlLogRead(
+        command=payload["command"],
+        total=len(device_ids),
+        success_count=success_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+        results=results,
+    )
+
+
+@router.get("/{device_id}/commands", response_model=list[ControlLogRead])
 def list_commands(
     device_id: int,
     limit: int = Query(default=20, ge=1, le=200),
