@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import require_admin
+from app.models.alarm_log import AlarmLog
+from app.models.control_log import ControlLog
 from app.models.device import Device
+from app.models.light_data import LightData
+from app.models.threshold_config import ThresholdConfig
 from app.mqtt.client import mqtt_client
 from app.routers.devices import ensure_device_code_unique, get_device_or_404
 from app.schemas.simulator import (
@@ -166,10 +170,15 @@ def delete_simulator_device(
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_admin),
 ) -> dict[str, str]:
-    device = get_device_or_404(db, device_id)
+    get_device_or_404(db, device_id)
     simulator_manager.remove_device(device_id)
     try:
-        db.delete(device)
+        # 删除关联数据，避免外键约束冲突
+        db.query(LightData).filter(LightData.device_id == device_id).delete()
+        db.query(ThresholdConfig).filter(ThresholdConfig.device_id == device_id).delete()
+        db.query(ControlLog).filter(ControlLog.device_id == device_id).delete()
+        db.query(AlarmLog).filter(AlarmLog.device_id == device_id).delete()
+        db.query(Device).filter(Device.id == device_id).delete()
         db.commit()
     except Exception as error:  # noqa: BLE001
         db.rollback()

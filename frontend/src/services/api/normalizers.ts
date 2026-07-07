@@ -15,6 +15,8 @@ export interface DeviceApiPayload {
   device_code: string;
   device_name: string;
   location: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   status: string;
   last_heartbeat_at?: string | null;
 }
@@ -137,6 +139,8 @@ export function mapDevicePayload(payload: DeviceApiPayload): Device {
     deviceCode: payload.device_code,
     deviceName: payload.device_name,
     location: payload.location ?? "-",
+    latitude: payload.latitude ?? undefined,
+    longitude: payload.longitude ?? undefined,
     status: mapDeviceStatus(payload.status),
     lampStatus: "OFF",
     lastHeartbeatAt: formatDateTime(payload.last_heartbeat_at),

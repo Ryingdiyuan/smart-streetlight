@@ -93,9 +93,27 @@
     </div>
 
     <div v-if="device" class="content-grid two-columns">
+      <PanelCard title="位置地图" subtitle="GPS 坐标定位">
+        <div v-if="hasCoords" class="detail-mini-map-wrapper">
+          <div ref="miniMapContainer" class="detail-mini-map"></div>
+          <div class="detail-coords-bar">
+            <span>纬度 {{ device.latitude?.toFixed(4) }}</span>
+            <span class="coord-sep">/</span>
+            <span>经度 {{ device.longitude?.toFixed(4) }}</span>
+          </div>
+        </div>
+        <div v-else class="placeholder-box">
+          该设备暂无 GPS 坐标信息<br />
+          <small>请前往「设备地图」页面设置坐标</small>
+        </div>
+      </PanelCard>
+
       <PanelCard title="历史光照曲线" subtitle="设备详情页趋势展示">
         <TrendLineChart :points="device.history" />
       </PanelCard>
+    </div>
+
+    <div v-if="device" class="content-grid two-columns">
       <PanelCard title="状态摘要" subtitle="当前设备运行情况">
         <div class="detail-summary-grid">
           <div class="summary-box">
@@ -124,9 +142,7 @@
           </div>
         </div>
       </PanelCard>
-    </div>
 
-    <div v-if="device" class="content-grid two-columns">
       <PanelCard title="最近采样记录" subtitle="用于展示上报历史点位">
         <div class="table-wrapper">
           <table>
@@ -155,7 +171,9 @@
           </table>
         </div>
       </PanelCard>
+    </div>
 
+    <div v-if="device" class="content-grid two-columns">
       <PanelCard title="运维建议" subtitle="结合当前阈值和设备状态给出提示">
         <div class="detail-summary-grid">
           <div class="summary-box">
@@ -168,11 +186,64 @@
           </div>
         </div>
       </PanelCard>
+
+      <CommandLogPanel :logs="device.commandLogs" />
     </div>
 
     <div v-if="device" class="content-grid two-columns">
-      <CommandLogPanel :logs="device.commandLogs" />
       <AlarmRecordPanel :alarms="device.alarms" />
+      <PanelCard title="位置坐标" subtitle="设备经纬度信息">
+        <div class="coord-card-body">
+          <div v-if="canOperateDevices && !coordEditing" class="coord-card-actions">
+            <button class="ghost-button" type="button" @click="startCoordEdit">编辑</button>
+          </div>
+
+          <!-- 编辑模式 -->
+          <div v-if="coordEditing" class="coord-edit-form">
+            <label>
+              <span>纬度</span>
+              <input v-model.number="editLatitude" class="search-input" type="number" step="any" placeholder="例如 29.531" />
+            </label>
+            <label>
+              <span>经度</span>
+              <input v-model.number="editLongitude" class="search-input" type="number" step="any" placeholder="例如 106.528" />
+            </label>
+            <label>
+              <span>位置描述</span>
+              <input v-model="editLocation" class="search-input" type="text" placeholder="例如 操场东侧" maxlength="255" />
+            </label>
+
+            <p v-if="coordEditError" class="form-error">{{ coordEditError }}</p>
+
+            <div class="button-row">
+              <button class="ghost-button" type="button" :disabled="coordSaving" @click="cancelCoordEdit">取消</button>
+              <button class="primary-button" type="button" :disabled="coordSaving" @click="saveCoordEdit">
+                {{ coordSaving ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 查看模式 -->
+          <div v-else class="detail-summary-grid">
+            <div class="summary-box">
+              <strong>纬度</strong>
+              <span>{{ device.latitude != null ? device.latitude.toFixed(6) : '暂无' }}</span>
+            </div>
+            <div class="summary-box">
+              <strong>经度</strong>
+              <span>{{ device.longitude != null ? device.longitude.toFixed(6) : '暂无' }}</span>
+            </div>
+            <div class="summary-box">
+              <strong>安装位置</strong>
+              <span>{{ device.location || '暂无描述' }}</span>
+            </div>
+            <div class="summary-box">
+              <strong>最后心跳</strong>
+              <span>{{ device.lastHeartbeatAt }}</span>
+            </div>
+          </div>
+        </div>
+      </PanelCard>
     </div>
 
     <PanelCard v-else title="设备详情" subtitle="数据不存在">
@@ -182,7 +253,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import AlarmRecordPanel from "@/components/AlarmRecordPanel.vue";
@@ -191,7 +262,7 @@ import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import TrendLineChart from "@/components/TrendLineChart.vue";
-import { getDeviceDetail, sendDeviceCommand, updateDeviceThreshold } from "@/services/deviceService";
+import { getDeviceDetail, sendDeviceCommand, updateDevice, updateDeviceThreshold } from "@/services/deviceService";
 import { can } from "@/services/permissions";
 import type { CommandLog, DeviceDetail, ThresholdConfig } from "@/types/models";
 
@@ -210,6 +281,105 @@ const threshold = reactive<ThresholdConfig>({
 });
 
 const canOperateDevices = computed(() => can("operateDevices"));
+
+// ---- 坐标编辑状态 ----
+const coordEditing = ref(false);
+const coordSaving = ref(false);
+const coordEditError = ref<string | null>(null);
+const editLatitude = ref(0);
+const editLongitude = ref(0);
+const editLocation = ref("");
+
+function startCoordEdit() {
+  if (!device.value) return;
+  editLatitude.value = device.value.latitude ?? 0;
+  editLongitude.value = device.value.longitude ?? 0;
+  editLocation.value = device.value.location ?? "";
+  coordEditing.value = true;
+  coordEditError.value = null;
+}
+
+function cancelCoordEdit() {
+  coordEditing.value = false;
+  coordEditError.value = null;
+}
+
+async function saveCoordEdit() {
+  if (!device.value) return;
+  coordSaving.value = true;
+  coordEditError.value = null;
+  try {
+    await updateDevice(device.value.id, {
+      latitude: editLatitude.value || undefined,
+      longitude: editLongitude.value || undefined,
+      location: editLocation.value || undefined,
+    });
+    coordEditing.value = false;
+    await loadDetail();
+  } catch (e) {
+    coordEditError.value = e instanceof Error ? e.message : "保存失败";
+  } finally {
+    coordSaving.value = false;
+  }
+}
+
+// ---- Mini map ----
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || "";
+const miniMapContainer = ref<HTMLDivElement | null>(null);
+let miniMap: AMapMap | null = null;
+let miniMarker: AMapMarker | null = null;
+
+const hasCoords = computed(() => {
+  const d = device.value;
+  return d && d.latitude != null && d.longitude != null;
+});
+
+async function loadAmap(): Promise<void> {
+  if (window.AMap) return;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`;
+    script.async = true;
+    script.onload = () => {
+      window.AMap.plugin(["AMap.MoveAnimation"], () => resolve());
+    };
+    script.onerror = () => reject(new Error("高德地图 API 加载失败"));
+    document.head.appendChild(script);
+  });
+}
+
+async function initMiniMap(): Promise<void> {
+  if (!miniMapContainer.value || !hasCoords.value) return;
+  try {
+    await loadAmap();
+  } catch {
+    return;
+  }
+  const d = device.value!;
+  miniMap = new window.AMap.Map(miniMapContainer.value, {
+    zoom: 16,
+    center: [d.longitude!, d.latitude!],
+    mapStyle: "amap://styles/light",
+    resizeEnable: true,
+    zoomEnable: false,
+    dragEnable: false,
+  });
+  miniMarker = new window.AMap.Marker({
+    position: [d.longitude!, d.latitude!],
+  });
+  miniMarker.setMap(miniMap);
+}
+
+function destroyMiniMap(): void {
+  if (miniMarker) {
+    miniMarker.setMap(null);
+    miniMarker = null;
+  }
+  if (miniMap) {
+    miniMap.destroy();
+    miniMap = null;
+  }
+}
 
 const overviewStats = computed(() => {
   if (!device.value) return [];
@@ -285,6 +455,12 @@ async function loadDetail() {
   if (device.value) {
     Object.assign(threshold, device.value.threshold);
   }
+  // 延迟等 DOM 渲染后再初始化 mini map
+  await nextTick();
+  destroyMiniMap();
+  if (hasCoords.value) {
+    await initMiniMap();
+  }
 }
 
 async function saveThreshold() {
@@ -325,7 +501,82 @@ onBeforeUnmount(() => {
   if (commandRefreshTimer !== undefined) {
     window.clearTimeout(commandRefreshTimer);
   }
+  destroyMiniMap();
 });
 
 watch(() => route.params.id, loadDetail);
 </script>
+
+<style scoped>
+/* ---- Mini map ---- */
+.detail-mini-map-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detail-mini-map {
+  width: 100%;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.detail-coords-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #64748b);
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+.coord-sep {
+  color: var(--border-color, #e2e8f0);
+}
+
+.placeholder-box {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.9rem;
+}
+
+.placeholder-box small {
+  display: inline-block;
+  margin-top: 0.35rem;
+  opacity: 0.7;
+}
+
+/* ---- 坐标编辑 ---- */
+.coord-card-body {
+  position: relative;
+}
+
+.coord-card-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.coord-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.coord-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #64748b);
+}
+
+.coord-edit-form .button-row {
+  margin-top: 0.25rem;
+}
+</style>

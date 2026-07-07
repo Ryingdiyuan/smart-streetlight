@@ -10,6 +10,8 @@ export interface Device {
   deviceCode: string;
   deviceName: string;
   location: string;
+  latitude?: number;
+  longitude?: number;
   status: DeviceStatus;
   lampStatus: LampStatus;
   lastHeartbeatAt: string;

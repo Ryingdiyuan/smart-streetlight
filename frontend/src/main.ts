@@ -3,6 +3,7 @@ import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";
 import { initTheme } from "./services/themeStorage";
+import "./types/amap";
 import "./style.css";
 
 initTheme();

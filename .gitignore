@@ -124,4 +124,7 @@ venv.bak/
 dmypy.json
 
 # Pyre type checker
-.pyre/SS
+.pyre/
+
+# Claude Code local settings
+.claude/settings.local.json

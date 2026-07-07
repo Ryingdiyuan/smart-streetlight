@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import require_admin, require_user_or_above
 from app.models.device import Device
+from app.models.light_data import LightData
+from app.models.threshold_config import ThresholdConfig
+from app.models.control_log import ControlLog
+from app.models.alarm_log import AlarmLog
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -94,7 +98,12 @@ def delete_device(
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_admin),
 ) -> dict[str, str]:
-    device = get_device_or_404(db, device_id)
-    db.delete(device)
+    get_device_or_404(db, device_id)
+    # 删除关联数据，避免外键约束冲突
+    db.query(LightData).filter(LightData.device_id == device_id).delete()
+    db.query(ThresholdConfig).filter(ThresholdConfig.device_id == device_id).delete()
+    db.query(ControlLog).filter(ControlLog.device_id == device_id).delete()
+    db.query(AlarmLog).filter(AlarmLog.device_id == device_id).delete()
+    db.query(Device).filter(Device.id == device_id).delete()
     db.commit()
     return {"message": "删除成功"}
