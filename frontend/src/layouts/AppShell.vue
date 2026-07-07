@@ -67,13 +67,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: "/", label: "总览大屏", description: "实时概览与图表入口", permission: "viewDashboard" },
+  { to: "/software-devices", label: "软件设备中心", description: "设备建档与业务入口", permission: "manageDeviceRegistry" },
   { to: "/devices", label: "设备列表", description: "设备管理与详情跳转", permission: "viewDevices" },
   { to: "/map", label: "设备地图", description: "GIS 可视化分布", permission: "viewDevices" },
   { to: "/realtime-light", label: "实时光照监测", description: "传感器实时数据", permission: "viewDevices" },
   { to: "/light-history", label: "历史光照数据", description: "光照趋势与统计", permission: "viewDevices" },
   { to: "/alarms", label: "告警日志", description: "离线和异常告警记录", permission: "viewDevices" },
   { to: "/users", label: "用户管理", description: "账号、角色与状态维护", permission: "manageUsers" },
-  { to: "/simulator", label: "模拟器控制台", description: "配置 Broker 与管理传感器", permission: "manageSimulator" },
   { to: "/agent", label: "智能问答", description: "维护建议与故障排查", permission: "viewAgent" },
 ];
 

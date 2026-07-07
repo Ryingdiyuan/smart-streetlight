@@ -1,6 +1,8 @@
 import type {
   AlarmLevel,
   AlarmRecord,
+  BatchCommandResult,
+  BatchCommandSummary,
   AlarmType,
   CommandLog,
   Device,
@@ -49,6 +51,23 @@ export interface ControlLogApiPayload {
   request_payload?: Record<string, unknown> | null;
   reply_payload?: Record<string, unknown> | null;
   created_at: string;
+}
+
+export interface BatchControlLogItemApiPayload {
+  device_id: number;
+  device_code: string;
+  result: string;
+  log_id: number;
+  created_at: string;
+}
+
+export interface BatchControlLogApiPayload {
+  command: string;
+  total: number;
+  success_count: number;
+  failed_count: number;
+  skipped_count: number;
+  results: BatchControlLogItemApiPayload[];
 }
 
 export interface AlarmApiPayload {
@@ -178,6 +197,31 @@ export function mapCommandLogPayload(
     source: mapCommandSource(payload.source),
     result: mapCommandResult(payload.result),
     createdAt: formatDateTime(payload.created_at),
+  };
+}
+
+export function mapBatchCommandResultPayload(
+  payload: BatchControlLogItemApiPayload,
+): BatchCommandResult {
+  return {
+    deviceId: payload.device_id,
+    deviceCode: payload.device_code,
+    result: mapCommandResult(payload.result),
+    logId: String(payload.log_id),
+    createdAt: formatDateTime(payload.created_at),
+  };
+}
+
+export function mapBatchCommandSummaryPayload(
+  payload: BatchControlLogApiPayload,
+): BatchCommandSummary {
+  return {
+    command: payload.command.toUpperCase() as BatchCommandSummary["command"],
+    total: payload.total,
+    successCount: payload.success_count,
+    failedCount: payload.failed_count,
+    skippedCount: payload.skipped_count,
+    results: payload.results.map(mapBatchCommandResultPayload),
   };
 }
 

@@ -12,7 +12,7 @@ import LoginPage from "@/pages/LoginPage.vue";
 import MapViewPage from "@/pages/MapViewPage.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import RealtimeLightPage from "@/pages/RealtimeLightPage.vue";
-import SimulatorConsolePage from "@/pages/SimulatorConsolePage.vue";
+import SoftwareDeviceCenterPage from "@/pages/SoftwareDeviceCenterPage.vue";
 import UserManagementPage from "@/pages/UserManagementPage.vue";
 import { getAccessToken, getAuthSession } from "@/services/authStorage";
 import { allRoles, getDefaultRouteForRole, hasRole } from "@/services/permissions";
@@ -33,6 +33,12 @@ const router = createRouter({
           name: "dashboard",
           component: DashboardPage,
           meta: { title: "总览大屏", roles: allRoles },
+        },
+        {
+          path: "software-devices",
+          name: "software-devices",
+          component: SoftwareDeviceCenterPage,
+          meta: { title: "软件设备中心", roles: adminOnly },
         },
         {
           path: "devices",
@@ -75,12 +81,6 @@ const router = createRouter({
           name: "light-history",
           component: LightHistoryPage,
           meta: { title: "历史光照数据", roles: allRoles },
-        },
-        {
-          path: "simulator",
-          name: "simulator",
-          component: SimulatorConsolePage,
-          meta: { title: "模拟器控制台", roles: adminOnly },
         },
         {
           path: "users",

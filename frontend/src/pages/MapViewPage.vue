@@ -13,6 +13,15 @@
           <span class="legend-item"><span class="legend-dot lamp-off"></span>灯灭</span>
         </div>
         <span class="device-count">共 {{ devices.length }} 台设备</span>
+        <button
+          v-if="canCreateOnMap"
+          class="ghost-button"
+          :class="{ 'map-add-button-active': pickingLocation }"
+          type="button"
+          @click="togglePickingLocation"
+        >
+          {{ pickingLocation ? "取消选点新增" : "地图选点新增" }}
+        </button>
         <button class="ghost-button" type="button" @click="refreshDevices" :disabled="loading">
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
@@ -22,8 +31,14 @@
     <div class="map-container-wrapper">
       <div ref="mapContainer" class="map-container"></div>
 
-      <!-- 提示：点击地图添加设备 / 拖动标记修改坐标 -->
-      <div class="map-hint">点击地图空白处添加设备 · 拖动标记可修改坐标</div>
+      <!-- 提示：仅在选点模式下新增，避免误触 -->
+      <div class="map-hint" :class="{ 'map-hint-active': pickingLocation }">
+        {{
+          pickingLocation
+            ? "已进入选点新增模式：点击地图空白处选择坐标"
+            : "点击“地图选点新增”后可新增设备 · 拖动标记可修改坐标"
+        }}
+      </div>
 
       <!-- 加载状态 -->
       <div v-if="loading && devices.length === 0" class="map-loading">
@@ -115,6 +130,7 @@
               </label>
             </div>
 
+            <p class="form-note">地图新增只创建设备档案与坐标，不会自动加入模拟控制台。</p>
             <p v-if="addError" class="form-error">{{ addError }}</p>
 
             <div class="modal-actions">
@@ -163,17 +179,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 
-import { createDevice, getDeviceList, updateDevice } from "@/services/api/deviceService";
+import { createDevice, getDeviceList, updateDevice } from "@/services/deviceService";
+import { hasRole } from "@/services/permissions";
 import type { Device } from "@/types/models";
 
 // ---- 组件状态 ----
+const router = useRouter();
 const mapContainer = ref<HTMLDivElement | null>(null);
 const devices = ref<Device[]>([]);
 const noCoordDevices = ref<Device[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const pickingLocation = ref(false);
 
 let map: AMapMap | null = null;
 let markers: AMapMarker[] = [];
@@ -202,6 +222,7 @@ const newLatitude = ref(0);
 const newLongitude = ref(0);
 const coordUpdateError = ref<string | null>(null);
 const coordUpdating = ref(false);
+const canCreateOnMap = computed(() => hasRole(["admin"]));
 
 function cancelCoordUpdate() {
   showCoordConfirm.value = false;
@@ -231,9 +252,15 @@ async function confirmCoordUpdate() {
 function closeAddModal() {
   showAddModal.value = false;
   addError.value = null;
+  pickingLocation.value = false;
   form.deviceCode = "";
   form.deviceName = "";
   form.location = "";
+}
+
+function togglePickingLocation() {
+  pickingLocation.value = !pickingLocation.value;
+  addError.value = null;
 }
 
 async function handleAddDevice() {
@@ -241,7 +268,7 @@ async function handleAddDevice() {
   submitting.value = true;
   addError.value = null;
   try {
-    await createDevice({
+    const createdDevice = await createDevice({
       device_code: form.deviceCode,
       device_name: form.deviceName,
       location: form.location || undefined,
@@ -250,6 +277,7 @@ async function handleAddDevice() {
     });
     closeAddModal();
     await refreshDevices();
+    await router.push(`/devices/${createdDevice.id}`);
   } catch (e) {
     addError.value = e instanceof Error ? e.message : "添加设备失败";
   } finally {
@@ -259,6 +287,9 @@ async function handleAddDevice() {
 
 // ---- 地图点击处理 ----
 function onMapClick(e: { lnglat: AMapLngLat }) {
+  if (!pickingLocation.value || !canCreateOnMap.value) {
+    return;
+  }
   form.latitude = e.lnglat.lat;
   form.longitude = e.lnglat.lng;
   form.deviceCode = "";
@@ -407,8 +438,8 @@ async function refreshDevices(): Promise<void> {
 
         marker.on("click", (e) => {
           // 阻止事件冒泡，避免触发地图 click → 打开添加设备弹窗
-          if (typeof e.stopPropagation === "function") {
-            e.stopPropagation();
+          if (e) {
+            e._stopPropagation = true;
           }
 
           // 如果 dragend 已经处理过这次操作，跳过
@@ -570,6 +601,17 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.map-hint-active {
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #2563eb;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.14);
+}
+
+.map-add-button-active {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
 /* ---- 覆盖层 ---- */
 .map-loading,
 .map-error {
@@ -674,6 +716,13 @@ onUnmounted(() => {
   color: #ef4444;
   font-size: 0.85rem;
   margin: 0;
+}
+
+.form-note {
+  margin: 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 .modal-actions {
