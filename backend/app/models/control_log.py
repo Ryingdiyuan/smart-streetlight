@@ -22,3 +22,4 @@ class ControlLog(Base):
     request_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     reply_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
