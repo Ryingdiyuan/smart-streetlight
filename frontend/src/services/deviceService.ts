@@ -7,4 +7,5 @@ export const {
   getDeviceDetail,
   updateDeviceThreshold,
   sendDeviceCommand,
+  updateDevice,
 } = createServiceSwitcher(mockService, apiService);

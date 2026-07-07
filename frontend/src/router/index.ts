@@ -9,6 +9,7 @@ import DeviceListPage from "@/pages/DeviceListPage.vue";
 import ForbiddenPage from "@/pages/ForbiddenPage.vue";
 import LightHistoryPage from "@/pages/LightHistoryPage.vue";
 import LoginPage from "@/pages/LoginPage.vue";
+import MapViewPage from "@/pages/MapViewPage.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import RealtimeLightPage from "@/pages/RealtimeLightPage.vue";
 import SimulatorConsolePage from "@/pages/SimulatorConsolePage.vue";
@@ -44,6 +45,12 @@ const router = createRouter({
           name: "device-detail",
           component: DeviceDetailPage,
           meta: { title: "设备详情", roles: allRoles },
+        },
+        {
+          path: "map",
+          name: "map",
+          component: MapViewPage,
+          meta: { title: "设备地图", roles: allRoles },
         },
         {
           path: "alarms",

@@ -68,6 +68,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: "/", label: "总览大屏", description: "实时概览与图表入口", permission: "viewDashboard" },
   { to: "/devices", label: "设备列表", description: "设备管理与详情跳转", permission: "viewDevices" },
+  { to: "/map", label: "设备地图", description: "GIS 可视化分布", permission: "viewDevices" },
   { to: "/realtime-light", label: "实时光照监测", description: "传感器实时数据", permission: "viewDevices" },
   { to: "/light-history", label: "历史光照数据", description: "光照趋势与统计", permission: "viewDevices" },
   { to: "/alarms", label: "告警日志", description: "离线和异常告警记录", permission: "viewDevices" },
@@ -96,7 +97,7 @@ function toggleTheme() {
 function isNavItemActive(path: string) {
   if (path === "/") return route.path === "/";
   if (path === "/devices") return route.path === "/devices" || route.path.startsWith("/devices/");
-  return route.path === path || route.path.startsWith(`${path}/`);
+  return route.path === path;
 }
 
 async function handleLogout() {

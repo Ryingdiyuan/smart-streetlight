@@ -7,6 +7,8 @@ class DeviceBase(BaseModel):
     device_code: str
     device_name: str
     location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     status: str = "offline"
 
 
@@ -18,6 +20,8 @@ class DeviceUpdate(BaseModel):
     device_code: str | None = None
     device_name: str | None = None
     location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     status: str | None = None
 
 

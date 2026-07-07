@@ -54,3 +54,25 @@ export async function sendDeviceCommand(
 
   return structuredClone(newLog);
 }
+
+export async function updateDevice(
+  id: number,
+  data: { latitude?: number; longitude?: number; device_name?: string; location?: string },
+): Promise<Device> {
+  await delay();
+  const device = mockDevices.find((d) => d.id === id);
+  if (!device) throw new Error("设备不存在");
+  if (data.latitude !== undefined) device.latitude = data.latitude;
+  if (data.longitude !== undefined) device.longitude = data.longitude;
+  if (data.device_name) device.deviceName = data.device_name;
+  if (data.location !== undefined) device.location = data.location;
+
+  // Also update in mockDeviceDetails
+  const detail = mockDeviceDetails[id];
+  if (detail) {
+    if (data.latitude !== undefined) detail.latitude = data.latitude;
+    if (data.longitude !== undefined) detail.longitude = data.longitude;
+  }
+
+  return structuredClone(device);
+}

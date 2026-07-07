@@ -132,3 +132,24 @@ export async function sendDeviceCommand(
 
   return mapCommandLogPayload(payload);
 }
+
+export interface CreateDevicePayload {
+  device_code: string;
+  device_name: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export async function createDevice(data: CreateDevicePayload): Promise<Device> {
+  const payload = await http.post<DeviceApiPayload>("/devices", data);
+  return mapDevicePayload(payload);
+}
+
+export async function updateDevice(
+  id: number,
+  data: Partial<CreateDevicePayload>,
+): Promise<Device> {
+  const payload = await http.put<DeviceApiPayload>(`/devices/${id}`, data);
+  return mapDevicePayload(payload);
+}

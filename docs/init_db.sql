@@ -30,6 +30,8 @@ CREATE TABLE `devices` (
     `device_code`       VARCHAR(64)   NOT NULL COMMENT '设备编号（唯一）',
     `device_name`       VARCHAR(100)  NOT NULL COMMENT '设备名称',
     `location`          VARCHAR(255)  DEFAULT NULL COMMENT '安装位置',
+    `latitude`          FLOAT         DEFAULT NULL COMMENT 'GPS 纬度',
+    `longitude`         FLOAT         DEFAULT NULL COMMENT 'GPS 经度',
     `status`            VARCHAR(20)   NOT NULL DEFAULT 'offline' COMMENT 'online / offline',
     `last_heartbeat_at` DATETIME      DEFAULT NULL COMMENT '最后心跳时间',
     `created_at`        DATETIME      NOT NULL COMMENT '创建时间',
