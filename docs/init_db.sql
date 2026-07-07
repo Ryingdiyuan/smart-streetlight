@@ -21,7 +21,6 @@ DROP TABLE IF EXISTS `light_data`;
 DROP TABLE IF EXISTS `threshold_configs`;
 DROP TABLE IF EXISTS `conversations`;
 DROP TABLE IF EXISTS `messages`;
-DROP TABLE IF EXISTS `db_sync_meta`;
 DROP TABLE IF EXISTS `devices`;
 DROP TABLE IF EXISTS `users`;
 
@@ -142,16 +141,3 @@ CREATE TABLE `alarm_logs` (
         REFERENCES `devices` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================================================
--- 7. 同步元信息表 (db_sync_meta)
---    记录云端到本地同步进度
--- ============================================================
-CREATE TABLE `db_sync_meta` (
-    `id`              INT         NOT NULL AUTO_INCREMENT,
-    `table_name`      VARCHAR(64) NOT NULL COMMENT '表名',
-    `last_synced_id`  INT         NOT NULL DEFAULT 0 COMMENT '最后同步的 ID（追加表）',
-    `last_synced_at`  DATETIME    DEFAULT NULL COMMENT '最后同步时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_table_name` (`table_name`),
-    KEY `ix_db_sync_meta_id` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -15,11 +15,6 @@ from app.tasks.scheduler import scheduler
 async def lifespan(app: FastAPI):
     init_db()
 
-    if settings.cloud_db_enabled:
-        from app.services.db_sync import full_sync_from_cloud
-
-        full_sync_from_cloud()
-
     simulator_manager.start()
     if settings.mqtt_enabled:
         mqtt_client.start()

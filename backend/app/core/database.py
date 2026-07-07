@@ -20,7 +20,6 @@ def init_db() -> None:
         control_log,
         device,
         light_data,
-        sync_meta,
         threshold_config,
         user,
     )
