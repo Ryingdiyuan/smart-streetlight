@@ -29,14 +29,6 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     device_offline_seconds: int = 180
 
-    cloud_db_enabled: bool = False
-    cloud_mysql_host: str = "127.0.0.1"
-    cloud_mysql_port: int = 3306
-    cloud_mysql_user: str = "root"
-    cloud_mysql_password: str = Field(default="", repr=False)
-    cloud_mysql_database: str = "smart_streetlight"
-    db_sync_interval_seconds: int = 30
-
     llm_enabled: bool = False
     llm_provider: str = "openai-compatible"
     llm_api_key: str = Field(default="", repr=False)
@@ -60,15 +52,6 @@ class Settings(BaseSettings):
         return (
             f"mysql+pymysql://{self.mysql_user}:{password}"
             f"@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
-            "?charset=utf8mb4"
-        )
-
-    @property
-    def cloud_database_url(self) -> str:
-        password = quote_plus(self.cloud_mysql_password)
-        return (
-            f"mysql+pymysql://{self.cloud_mysql_user}:{password}"
-            f"@{self.cloud_mysql_host}:{self.cloud_mysql_port}/{self.cloud_mysql_database}"
             "?charset=utf8mb4"
         )
 
