@@ -15,7 +15,15 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def init_db() -> None:
-    from app.models import alarm_log, control_log, device, light_data, threshold_config, user  # noqa: F401
+    from app.models import (  # noqa: F401
+        alarm_log,
+        control_log,
+        device,
+        light_data,
+        sync_meta,
+        threshold_config,
+        user,
+    )
 
     Base.metadata.create_all(bind=engine)
 

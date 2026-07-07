@@ -21,3 +21,4 @@ class AlarmLog(Base):
     handled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     handled_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)

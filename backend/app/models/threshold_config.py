@@ -24,3 +24,4 @@ class ThresholdConfig(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)

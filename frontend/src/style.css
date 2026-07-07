@@ -1263,6 +1263,21 @@ html[data-theme="light"] .ghost-button {
   background: rgba(255, 255, 255, 0.92);
 }
 
+html[data-theme="light"] .user-message {
+  background: linear-gradient(135deg, rgba(37, 99, 170, 0.15), rgba(37, 99, 170, 0.08));
+  color: #1e293b;
+}
+
+html[data-theme="light"] .agent-message {
+  background: rgba(240, 245, 252, 0.95);
+  color: #1e293b;
+}
+
+html[data-theme="light"] .chat-avatar-agent {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563a8, #1e40af);
+}
+
 html[data-theme="dark"] .primary-button {
   color: #07111d;
   background: linear-gradient(135deg, #ffd166, #7cc7ff);
