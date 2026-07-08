@@ -12,6 +12,19 @@ interface AgentChatResponse {
   } | null;
 }
 
+interface ChatHistoryResponse {
+  messages: Array<{
+    id: number;
+    user_id: number;
+    role: string;
+    content: string;
+    device_id: number | null;
+    device_code: string | null;
+    created_at: string;
+  }>;
+  total: number;
+}
+
 const builtinPrompts: AgentPromptOption[] = [
   { id: "api-p1", title: "SL-001 离线后应该怎么排查？" },
   { id: "api-p2", title: "控制命令发送成功但设备未响应怎么办？" },
@@ -23,7 +36,12 @@ export async function getPromptOptions(): Promise<AgentPromptOption[]> {
 }
 
 export async function getConversation(): Promise<AgentMessage[]> {
-  return [];
+  const response = await http.get<ChatHistoryResponse>("/agent/history");
+  return response.messages.map((msg) => ({
+    id: `${msg.role}-${msg.id}`,
+    role: msg.role as "user" | "assistant",
+    content: msg.content,
+  }));
 }
 
 export async function sendQuestion(
@@ -47,4 +65,8 @@ export async function sendQuestion(
       (response.answer ?? response.content ?? "接口已返回，但当前没有可展示的回答内容。") +
       scopeHint,
   };
+}
+
+export async function clearHistory(): Promise<void> {
+  await http.delete("/agent/history");
 }

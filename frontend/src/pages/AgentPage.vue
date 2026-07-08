@@ -108,7 +108,7 @@ import { computed, onMounted, ref } from "vue";
 
 import PanelCard from "@/components/PanelCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
-import { getConversation, getPromptOptions, sendQuestion } from "@/services/agentService";
+import { clearHistory, getConversation, getPromptOptions, sendQuestion } from "@/services/agentService";
 import { getDeviceList } from "@/services/deviceService";
 import type { AgentMessage, AgentPromptOption, Device } from "@/types/models";
 
@@ -127,7 +127,10 @@ function usePrompt(prompt: string) {
   question.value = prompt;
 }
 
-function clearConversation() {
+async function clearConversation() {
+  if (messages.value.length === 0) return;
+  if (!window.confirm("确定清空所有对话记录？此操作不可恢复。")) return;
+  await clearHistory();
   messages.value = [];
 }
 
