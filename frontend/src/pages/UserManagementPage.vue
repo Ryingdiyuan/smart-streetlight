@@ -59,6 +59,15 @@
     </div>
 
     <PanelCard title="用户列表" subtitle="修改后立即保存到后端">
+      <div class="search-bar">
+        <input
+          v-model="searchQuery"
+          class="search-input"
+          type="text"
+          placeholder="搜索用户名..."
+          @input="handleSearch"
+        />
+      </div>
       <div v-if="loading" class="placeholder-box">正在加载用户列表...</div>
       <div v-else-if="loadError" class="placeholder-box">{{ loadError }}</div>
       <div v-else class="table-wrapper">
@@ -100,7 +109,7 @@
                   placeholder="留空则不修改"
                 />
               </td>
-              <td>
+              <td class="action-cell">
                 <button
                   class="primary-button"
                   type="button"
@@ -108,6 +117,14 @@
                   @click="handleUpdateUser(user.id)"
                 >
                   {{ savingUserId === user.id ? "保存中..." : "保存" }}
+                </button>
+                <button
+                  class="danger-button"
+                  type="button"
+                  :disabled="deletingUserId === user.id"
+                  @click="handleDeleteUser(user)"
+                >
+                  {{ deletingUserId === user.id ? "删除中..." : "删除" }}
                 </button>
               </td>
             </tr>
@@ -125,7 +142,7 @@
 import { onMounted, reactive, ref } from "vue";
 
 import PanelCard from "@/components/PanelCard.vue";
-import { createUser, getUserList, updateUser } from "@/services/api/userService";
+import { createUser, deleteUser, getUserList, updateUser } from "@/services/api/userService";
 import { allRoles, roleLabels } from "@/services/permissions";
 import type { AuthUser, UserRole } from "@/types/models";
 
@@ -141,7 +158,10 @@ const loading = ref(true);
 const loadError = ref("");
 const saving = ref(false);
 const savingUserId = ref<number | null>(null);
+const deletingUserId = ref<number | null>(null);
 const message = ref("");
+const searchQuery = ref("");
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 const createForm = reactive({
   username: "",
@@ -178,7 +198,7 @@ async function loadUsers() {
   loading.value = true;
   loadError.value = "";
   try {
-    users.value = await getUserList();
+    users.value = await getUserList(searchQuery.value || undefined);
     syncEditForms(users.value);
   } catch (error) {
     users.value = [];
@@ -236,7 +256,75 @@ async function handleUpdateUser(userId: number) {
   }
 }
 
+function handleSearch() {
+  if (searchTimer !== null) {
+    clearTimeout(searchTimer);
+  }
+  searchTimer = setTimeout(() => {
+    void loadUsers();
+  }, 300);
+}
+
+async function handleDeleteUser(user: AuthUser) {
+  if (!confirm(`确定要删除用户 "${user.username}" 吗？此操作不可恢复。`)) {
+    return;
+  }
+
+  deletingUserId.value = user.id;
+  message.value = "";
+  try {
+    await deleteUser(user.id);
+    message.value = `用户 "${user.username}" 已删除`;
+    await loadUsers();
+  } catch (error) {
+    message.value = getErrorMessage(error);
+  } finally {
+    deletingUserId.value = null;
+  }
+}
+
 onMounted(() => {
   void loadUsers();
 });
 </script>
+
+<style scoped>
+.search-bar {
+  margin-bottom: 12px;
+}
+
+.action-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.danger-button {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  background: #e74c3c;
+  color: #fff;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+html[data-theme="dark"] .danger-button {
+  background: #e74c3c;
+  color: #fff;
+}
+
+html[data-theme="dark"] .danger-button:hover:not(:disabled) {
+  background: #c0392b;
+}
+</style>
