@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -24,7 +26,10 @@ def ensure_username_unique(
     username: str,
     exclude_id: int | None = None,
 ) -> None:
-    query = db.query(User).filter(User.username == username)
+    query = db.query(User).filter(
+        User.username == username,
+        User.deleted_at.is_(None),
+    )
     if exclude_id is not None:
         query = query.filter(User.id != exclude_id)
 
@@ -62,8 +67,12 @@ def ensure_not_last_active_admin(db: Session, user: User, update_data: dict) -> 
 def list_users(
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_admin),
+    search: str | None = Query(None, description="模糊搜索用户名"),
 ) -> list[User]:
-    return db.query(User).order_by(User.id.asc()).all()
+    query = db.query(User).filter(User.deleted_at.is_(None))
+    if search:
+        query = query.filter(User.username.like(f"%{search}%"))
+    return query.order_by(User.id.asc()).all()
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -112,3 +121,28 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
+) -> None:
+    user = get_user_or_404(db, user_id)
+
+    if user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在",
+        )
+
+    if user.role == "admin" and user.is_active:
+        if active_admin_count(db, exclude_id=user_id) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能删除最后一个可用管理员",
+            )
+
+    user.deleted_at = datetime.now(timezone.utc)
+    db.commit()
