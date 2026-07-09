@@ -1,0 +1,25 @@
+{
+  "name": "smart-streetlight-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.0",
+    "pinia": "^2.2.0",
+    "@dcloudio/uni-app": "3.0.0-5010420260703001",
+    "@dcloudio/uni-app-plus": "3.0.0-5010420260703001",
+    "@dcloudio/uni-components": "3.0.0-5010420260703001",
+    "@dcloudio/uni-h5": "3.0.0-5010420260703001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-5010420260703001"
+  },
+  "devDependencies": {
+    "@dcloudio/vite-plugin-uni": "3.0.0-5010420260703001",
+    "typescript": "^5.6.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

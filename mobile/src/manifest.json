@@ -1,0 +1,17 @@
+{
+  "name": "smart-streetlight-mobile",
+  "appid": "__UNI__SMART_STREETLIGHT",
+  "versionName": "0.1.0",
+  "versionCode": 1,
+  "description": "智慧路灯节能系统 - 移动端",
+  "uni-app": {
+    "compilerVersion": "3.0.0"
+  },
+  "h5": {
+    "title": "智慧路灯节能系统",
+    "template": "index.html",
+    "router": {
+      "mode": "history"
+    }
+  }
+}
