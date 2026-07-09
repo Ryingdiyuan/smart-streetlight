@@ -123,6 +123,23 @@ const selectedDevice = computed(() =>
   devices.value.find((device) => device.deviceCode === selectedDeviceCode.value) ?? null,
 );
 
+function getErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "智能问答请求失败，请稍后重试。";
+  }
+
+  try {
+    const parsed = JSON.parse(error.message) as { detail?: string };
+    if (parsed.detail) {
+      return parsed.detail;
+    }
+  } catch {
+    // Keep the original message when it is not a JSON payload.
+  }
+
+  return error.message || "智能问答请求失败，请稍后重试。";
+}
+
 function usePrompt(prompt: string) {
   question.value = prompt;
 }
@@ -155,13 +172,22 @@ async function submitQuestion() {
   });
 
   isThinking.value = true;
-  const answer = await sendQuestion(currentQuestion, {
-    deviceId: inferredDevice?.id,
-    deviceCode: inferredDevice?.deviceCode,
-  });
-  messages.value.push(answer);
-  isThinking.value = false;
-  question.value = "";
+  try {
+    const answer = await sendQuestion(currentQuestion, {
+      deviceId: inferredDevice?.id,
+      deviceCode: inferredDevice?.deviceCode,
+    });
+    messages.value.push(answer);
+    question.value = "";
+  } catch (error) {
+    messages.value.push({
+      id: `assistant-error-${Date.now()}`,
+      role: "assistant",
+      content: `请求失败：${getErrorMessage(error)}`,
+    });
+  } finally {
+    isThinking.value = false;
+  }
 }
 
 onMounted(async () => {

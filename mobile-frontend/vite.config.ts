@@ -1,0 +1,43 @@
+import { defineConfig, loadEnv } from "vite";
+import vue from "@vitejs/plugin-vue";
+import path from "path";
+import Inspector from "unplugin-vue-dev-locator/vite";
+import traeBadgePlugin from "vite-plugin-trae-solo-badge";
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+
+  return {
+    build: {
+      sourcemap: "hidden",
+    },
+    server: {
+      host: "0.0.0.0",
+      port: 5176,
+      proxy: {
+        "/api": {
+          target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8000",
+          changeOrigin: true,
+        },
+      },
+    },
+    plugins: [
+      vue(),
+      Inspector(),
+      traeBadgePlugin({
+        variant: "dark",
+        position: "bottom-right",
+        prodOnly: true,
+        clickable: true,
+        clickUrl: "https://www.trae.ai/solo?showJoin=1",
+        autoTheme: true,
+        autoThemeTarget: "#app",
+      }),
+    ],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
+  };
+});

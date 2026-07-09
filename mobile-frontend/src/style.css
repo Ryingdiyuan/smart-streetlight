@@ -1,0 +1,196 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family:
+    "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #eef4ff;
+  background:
+    radial-gradient(circle at top, rgba(54, 215, 255, 0.16), transparent 26%),
+    linear-gradient(180deg, #07111d 0%, #0a1420 48%, #050b14 100%);
+  --page-bg: transparent;
+  --card-bg: rgba(9, 18, 31, 0.92);
+  --surface-panel: linear-gradient(180deg, rgba(12, 23, 38, 0.96), rgba(9, 16, 30, 0.94));
+  --surface-panel-alt: linear-gradient(180deg, rgba(16, 28, 46, 0.94), rgba(9, 18, 31, 0.92));
+  --surface-soft: rgba(8, 15, 27, 0.7);
+  --surface-subtle: rgba(7, 15, 26, 0.76);
+  --surface-inner: rgba(6, 13, 24, 0.72);
+  --surface-nav: rgba(8, 14, 25, 0.86);
+  --surface-chart: rgba(5, 12, 22, 0.72);
+  --text-primary: #eef4ff;
+  --text-secondary: #99adc8;
+  --text-muted: #72869f;
+  --border-soft: rgba(89, 120, 176, 0.18);
+  --border-strong: rgba(96, 124, 172, 0.2);
+  --accent: #36d7ff;
+  --accent-strong: #1bc2f0;
+  --soft-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --overlay-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  --input-bg: rgba(7, 15, 26, 0.54);
+  --chip-active-bg: rgba(54, 215, 255, 0.12);
+  --chip-active-border: rgba(54, 215, 255, 0.28);
+  --skeleton-bg: linear-gradient(90deg, rgba(18, 30, 46, 0.9), rgba(27, 43, 66, 0.9), rgba(18, 30, 46, 0.9));
+}
+
+:root[data-theme="mist-light"] {
+  color: #12233d;
+  background:
+    radial-gradient(circle at top, rgba(54, 215, 255, 0.24), transparent 28%),
+    linear-gradient(180deg, #edf5ff 0%, #dfeaf6 100%);
+  --page-bg: transparent;
+  --card-bg: rgba(255, 255, 255, 0.86);
+  --surface-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 248, 255, 0.94));
+  --surface-panel-alt: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 244, 253, 0.94));
+  --surface-soft: rgba(255, 255, 255, 0.88);
+  --surface-subtle: rgba(248, 251, 255, 0.92);
+  --surface-inner: rgba(243, 248, 255, 0.94);
+  --surface-nav: rgba(255, 255, 255, 0.9);
+  --surface-chart: rgba(248, 251, 255, 0.96);
+  --text-primary: #12233d;
+  --text-secondary: #4d6788;
+  --text-muted: #6c7f97;
+  --border-soft: rgba(18, 35, 61, 0.08);
+  --border-strong: rgba(18, 35, 61, 0.1);
+  --accent: #0078a8;
+  --accent-strong: #005f89;
+  --soft-shadow: 0 18px 44px rgba(22, 53, 94, 0.12);
+  --overlay-shadow: 0 18px 40px rgba(22, 53, 94, 0.12);
+  --input-bg: rgba(255, 255, 255, 0.82);
+  --chip-active-bg: rgba(0, 120, 168, 0.1);
+  --chip-active-border: rgba(0, 120, 168, 0.18);
+  --skeleton-bg: linear-gradient(90deg, rgba(236, 244, 253, 0.96), rgba(223, 234, 246, 0.98), rgba(236, 244, 253, 0.96));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  color: var(--text-primary);
+  background: inherit;
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  padding: 14px 16px;
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.page-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.action-button,
+.theme-chip,
+.chip-button {
+  border: 0;
+  cursor: pointer;
+}
+
+.action-button,
+.theme-chip,
+.action-button-soft,
+.chip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  text-decoration: none;
+}
+
+.action-button {
+  color: #05111d;
+  background: linear-gradient(135deg, var(--accent), #65f0ff);
+  box-shadow: 0 12px 24px rgba(54, 215, 255, 0.18);
+}
+
+.action-button-soft,
+.theme-chip,
+.chip-button {
+  color: var(--text-primary);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-soft);
+}
+
+.chip-button-active {
+  color: var(--text-primary);
+  border-color: var(--chip-active-border);
+  background: var(--chip-active-bg);
+}
+
+.mobile-skeleton-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-skeleton-card {
+  height: 88px;
+  border-radius: 22px;
+  background: var(--skeleton-bg);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.placeholder-text {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
