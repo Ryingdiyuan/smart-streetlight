@@ -63,9 +63,13 @@ function getErrorMessage(error: unknown) {
     return "登录失败，请稍后重试。";
   }
 
-  // HttpError already contains the backend detail message
-  if ("detail" in error && typeof (error as { detail: string }).detail === "string") {
-    return (error as { detail: string }).detail;
+  try {
+    const parsed = JSON.parse(error.message) as { detail?: string };
+    if (parsed.detail) {
+      return parsed.detail;
+    }
+  } catch {
+    // Keep the original error message when it is not JSON.
   }
 
   return error.message || "登录失败，请稍后重试。";

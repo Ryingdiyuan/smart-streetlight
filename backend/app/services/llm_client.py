@@ -245,6 +245,58 @@ def build_user_prompt(question: str, context: dict[str, Any]) -> str:
     )
 
 
+def normalize_response_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+
+    if isinstance(value, list):
+        parts = [normalize_response_text(item) for item in value]
+        return "\n".join(part for part in parts if part).strip()
+
+    if isinstance(value, dict):
+        for key in ("content", "text", "output_text", "value"):
+            if key in value:
+                normalized = normalize_response_text(value[key])
+                if normalized:
+                    return normalized
+
+    return ""
+
+
+def extract_answer_from_result(result: dict[str, Any]) -> str:
+    error_info = result.get("error")
+    if isinstance(error_info, dict):
+        error_message = normalize_response_text(error_info.get("message"))
+        error_code = normalize_response_text(error_info.get("code"))
+        if error_code and error_message:
+            raise RuntimeError(f"{error_code}: {error_message}")
+        if error_message:
+            raise RuntimeError(error_message)
+        raise RuntimeError("LLM 返回错误响应")
+
+    choices = result.get("choices")
+    if isinstance(choices, list) and choices:
+        first_choice = choices[0]
+        if isinstance(first_choice, dict):
+            message = first_choice.get("message")
+            if isinstance(message, dict):
+                answer = normalize_response_text(message.get("content"))
+                if answer:
+                    return answer
+
+            for key in ("content", "text", "output_text"):
+                answer = normalize_response_text(first_choice.get(key))
+                if answer:
+                    return answer
+
+    for key in ("output", "output_text", "content", "text"):
+        answer = normalize_response_text(result.get(key))
+        if answer:
+            return answer
+
+    raise RuntimeError("LLM 响应格式不符合预期")
+
+
 def call_openai_compatible_chat(question: str, context: dict[str, Any]) -> str:
     if not settings.llm_base_url:
         raise RuntimeError("LLM_BASE_URL 未配置")
@@ -287,11 +339,7 @@ def call_openai_compatible_chat(question: str, context: dict[str, Any]) -> str:
         raise RuntimeError("LLM 请求超时") from error
 
     result = json.loads(response_body)
-    try:
-        answer = result["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as error:
-        raise RuntimeError("LLM 响应格式不符合预期") from error
-
+    answer = extract_answer_from_result(result)
     if not str(answer).strip():
         raise RuntimeError("LLM 返回空回答")
     return str(answer).strip()
