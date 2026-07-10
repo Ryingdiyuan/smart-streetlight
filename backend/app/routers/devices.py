@@ -44,7 +44,12 @@ def list_devices(
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_user_or_above),
 ) -> list[Device]:
-    return db.query(Device).order_by(Device.id.asc()).all()
+    return (
+        db.query(Device)
+        .filter(Device.device_code.isnot(None), Device.device_code != "")
+        .order_by(Device.id.asc())
+        .all()
+    )
 
 
 @router.get("/{device_id}", response_model=DeviceRead)
