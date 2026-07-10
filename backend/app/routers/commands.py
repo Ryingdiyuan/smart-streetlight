@@ -1,15 +1,12 @@
-import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import require_maintainer_or_admin, require_user_or_above
 from app.models.control_log import ControlLog
 from app.models.device import Device
-from app.mqtt.client import mqtt_client
 from app.schemas.control_log import (
     BatchControlCommandCreate,
     BatchControlLogItemRead,
@@ -17,6 +14,7 @@ from app.schemas.control_log import (
     ControlCommandCreate,
     ControlLogRead,
 )
+from app.services.lamp_control import apply_lamp_command
 
 router = APIRouter(prefix="/devices", tags=["commands"])
 
@@ -63,27 +61,6 @@ def build_command_payload(command_create: ControlCommandCreate) -> dict:
     return payload
 
 
-def create_control_log(db: Session, device: Device, payload: dict) -> ControlLog:
-    if not settings.mqtt_enabled:
-        result = "skipped"
-    else:
-        topic = f"streetlight/{device.device_code}/command"
-        published = mqtt_client.publish(topic, json.dumps(payload, ensure_ascii=False))
-        result = "success" if published else "failed"
-
-    control_log = ControlLog(
-        device_id=device.id,
-        command=payload["command"],
-        source="manual",
-        result=result,
-        request_payload=payload,
-        reply_payload=None,
-    )
-    db.add(control_log)
-    db.flush()
-    return control_log
-
-
 @router.post("/{device_id}/commands", response_model=ControlLogRead, status_code=status.HTTP_201_CREATED)
 def create_command(
     device_id: int,
@@ -93,7 +70,13 @@ def create_command(
 ) -> ControlLog:
     device = get_device_or_404(db, device_id)
     payload = build_command_payload(command_create)
-    control_log = create_control_log(db, device, payload)
+    control_log = apply_lamp_command(
+        db,
+        device,
+        command=payload["command"],
+        source="manual",
+        brightness=payload.get("brightness"),
+    )
     db.commit()
     db.refresh(control_log)
     return control_log
@@ -123,7 +106,13 @@ def create_batch_command(
 
     for device_id in device_ids:
         device = device_map[device_id]
-        control_log = create_control_log(db, device, dict(payload))
+        control_log = apply_lamp_command(
+            db,
+            device,
+            command=payload["command"],
+            source="manual",
+            brightness=payload.get("brightness"),
+        )
         if control_log.result == "success":
             success_count += 1
         elif control_log.result == "failed":

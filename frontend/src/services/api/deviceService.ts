@@ -2,6 +2,7 @@ import { http } from "@/lib/http";
 import type {
   BatchCommandSummary,
   CommandLog,
+  ControlMode,
   Device,
   DeviceDetail,
   ThresholdConfig,
@@ -159,6 +160,8 @@ export interface CreateDevicePayload {
   location?: string;
   latitude?: number;
   longitude?: number;
+  sensor_id?: number;
+  control_mode?: ControlMode;
 }
 
 export async function createDevice(data: CreateDevicePayload): Promise<Device> {

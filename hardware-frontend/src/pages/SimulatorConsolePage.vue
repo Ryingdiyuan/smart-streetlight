@@ -2,11 +2,11 @@
   <section class="page-section">
     <header class="section-header">
       <div>
-        <p class="section-kicker">Simulator</p>
-        <h3>硬件联调控制台</h3>
+        <p class="section-kicker">Sensor Simulator</p>
+        <h3>传感器接入控制台</h3>
       </div>
       <p class="section-note">
-        面向后续硬件接入与 MQTT 联调，集中提供 Broker 配置、模拟启停、参数编辑和运行日志。
+        在这里创建和运行硬件传感器模拟。路灯档案与绑定关系由业务前端维护，未绑定传感器上报会被后端丢弃。
       </p>
     </header>
 
@@ -60,36 +60,72 @@
         </div>
       </PanelCard>
 
-      <PanelCard title="联调范围说明" subtitle="当前项目只承接硬件接入与设备联调">
-        <div class="detail-tip-grid">
-          <div class="summary-box">
-            <span>硬件前端</span>
-            <strong>负责 MQTT 与硬件联调</strong>
-          </div>
-          <div class="summary-box">
-            <span>软件前端</span>
-            <strong>负责设备建档与业务页面</strong>
-          </div>
+      <PanelCard title="新增传感器" subtitle="在硬件模拟器创建传感器档案，并可直接启动模拟上报">
+        <div class="form-grid">
+          <label>
+            <span>传感器编码</span>
+            <input v-model="createForm.sensorCode" type="text" placeholder="例如 SR-001" />
+          </label>
+          <label>
+            <span>传感器名称</span>
+            <input v-model="createForm.sensorName" type="text" placeholder="例如 北门光照传感器" />
+          </label>
+          <label>
+            <span>安装位置</span>
+            <input v-model="createForm.location" type="text" placeholder="例如 北门路口" />
+          </label>
+          <label>
+            <span>基础光照</span>
+            <input v-model.number="createForm.baseLight" type="number" min="0" />
+          </label>
+          <label>
+            <span>波动范围</span>
+            <input v-model.number="createForm.variance" type="number" min="0" />
+          </label>
+          <label>
+            <span>基础电压</span>
+            <input v-model.number="createForm.voltageBase" type="number" step="0.1" />
+          </label>
+          <label>
+            <span>遥测间隔（秒）</span>
+            <input v-model.number="createForm.telemetryIntervalSeconds" type="number" min="1" />
+          </label>
+          <label>
+            <span>心跳轮次</span>
+            <input v-model.number="createForm.statusEvery" type="number" min="1" />
+          </label>
+          <label class="checkbox-field">
+            <input v-model="createForm.online" type="checkbox" />
+            <span>模拟上报 online=true</span>
+          </label>
+          <label class="checkbox-field">
+            <input v-model="createForm.autoStart" type="checkbox" />
+            <span>创建后立即启动</span>
+          </label>
         </div>
 
         <div class="button-row simulator-actions-row">
-          <span class="inline-note">如需建设备档案、维护坐标或执行软件业务操作，请前往主软件前端完成。</span>
+          <button class="primary-button" type="button" :disabled="creatingSensor" @click="handleCreateSensor">
+            {{ creatingSensor ? "创建中..." : "注册传感器" }}
+          </button>
         </div>
+        <p v-if="createMessage" class="inline-note">{{ createMessage }}</p>
       </PanelCard>
     </div>
 
-    <PanelCard title="设备模拟列表" subtitle="运行状态表示是否发数据；模拟上报状态表示下一次发出的 online 值；系统设备状态来自设备列表的真实状态">
-      <div v-if="refreshing && !devices.length" class="placeholder-box">正在加载模拟器设备...</div>
+    <PanelCard title="传感器模拟列表" subtitle="未绑定传感器的数据不会驱动路灯；绑定后由传感器控制路灯开关">
+      <div v-if="refreshing && !sensors.length" class="placeholder-box">正在加载模拟器传感器...</div>
       <div v-else class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>设备编码</th>
-              <th>设备名称</th>
+              <th>传感器编码</th>
+              <th>传感器名称</th>
               <th>位置</th>
+              <th>绑定路灯</th>
+              <th>控制模式</th>
               <th>运行状态</th>
               <th>模拟上报状态</th>
-              <th>系统设备状态</th>
               <th>当前光照</th>
               <th>灯状态</th>
               <th>间隔</th>
@@ -99,30 +135,31 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="device in devices" :key="device.deviceId">
-              <td>{{ device.deviceCode }}</td>
-              <td>{{ device.deviceName }}</td>
-              <td>{{ device.location || "-" }}</td>
-              <td>
-                <StatusBadge :status="device.running ? 'success' : 'info'" :text="device.running ? '运行中' : '已停止'" />
-              </td>
-              <td>
-                <StatusBadge :status="device.online ? 'online' : 'offline'" :text="device.online ? '上报在线' : '上报离线'" />
-              </td>
-              <td>
-                <StatusBadge
-                  :status="device.systemStatus"
-                  :text="device.systemStatus === 'online' ? '系统在线' : '系统离线'"
-                />
-              </td>
-              <td>{{ device.currentLightIntensity }} lx</td>
-              <td>{{ device.lampStatus.toUpperCase() }}</td>
-              <td>{{ device.telemetryIntervalSeconds }}s / {{ device.statusEvery }}轮</td>
-              <td>{{ device.publishCount }}</td>
+            <tr v-for="sensor in sensors" :key="sensor.sensorId">
+              <td>{{ sensor.sensorCode }}</td>
+              <td>{{ sensor.sensorName }}</td>
+              <td>{{ sensor.location || "-" }}</td>
               <td>
                 <div class="table-cell-stack">
-                  <span>{{ device.lastCommand || "--" }}</span>
-                  <span class="inline-note">{{ device.lastCommandAt || "--" }}</span>
+                  <span>{{ sensor.boundDeviceCode || "未绑定" }}</span>
+                  <span class="inline-note">{{ sensor.boundDeviceName || "需在业务前端绑定" }}</span>
+                </div>
+              </td>
+              <td>{{ sensor.controlMode === "auto" ? "自动" : sensor.controlMode === "manual" ? "手动" : "--" }}</td>
+              <td>
+                <StatusBadge :status="sensor.running ? 'success' : 'info'" :text="sensor.running ? '运行中' : '已停止'" />
+              </td>
+              <td>
+                <StatusBadge :status="sensor.online ? 'online' : 'offline'" :text="sensor.online ? '上报在线' : '上报离线'" />
+              </td>
+              <td>{{ sensor.currentLightIntensity }} lx</td>
+              <td>{{ sensor.lampStatus.toUpperCase() }}</td>
+              <td>{{ sensor.telemetryIntervalSeconds }}s / {{ sensor.statusEvery }}轮</td>
+              <td>{{ sensor.publishCount }}</td>
+              <td>
+                <div class="table-cell-stack">
+                  <span>{{ sensor.lastCommand || "--" }}</span>
+                  <span class="inline-note">{{ sensor.lastCommandAt || "--" }}</span>
                 </div>
               </td>
               <td>
@@ -130,32 +167,32 @@
                   <button
                     class="ghost-button"
                     type="button"
-                    :disabled="pendingDeviceId === device.deviceId"
-                    @click="toggleDevice(device)"
+                    :disabled="pendingSensorId === sensor.sensorId"
+                    @click="toggleSensor(sensor)"
                   >
-                    {{ pendingDeviceId === device.deviceId ? "处理中..." : device.running ? "停止" : "启动" }}
+                    {{ pendingSensorId === sensor.sensorId ? "处理中..." : sensor.running ? "停止" : "启动" }}
                   </button>
                   <button
                     class="ghost-button"
                     type="button"
-                    :disabled="pendingDeviceId === device.deviceId"
-                    @click="openEditModal(device)"
+                    :disabled="pendingSensorId === sensor.sensorId"
+                    @click="openEditModal(sensor)"
                   >
                     编辑
                   </button>
                   <button
                     class="ghost-button"
                     type="button"
-                    :disabled="pendingDeviceId === device.deviceId"
-                    @click="handleDeleteDevice(device)"
+                    :disabled="pendingSensorId === sensor.sensorId"
+                    @click="handleDeleteSensor(sensor)"
                   >
                     删除
                   </button>
                 </div>
               </td>
             </tr>
-            <tr v-if="!devices.length">
-              <td colspan="12" class="table-empty">当前没有可管理的模拟设备</td>
+            <tr v-if="!sensors.length">
+              <td colspan="13" class="table-empty">当前没有可管理的模拟传感器</td>
             </tr>
           </tbody>
         </table>
@@ -197,20 +234,20 @@
       </div>
     </PanelCard>
 
-    <div v-if="editingDevice" class="simulator-modal-backdrop" @click.self="closeEditModal">
+    <div v-if="editingSensor" class="simulator-modal-backdrop" @click.self="closeEditModal">
       <section class="simulator-modal">
         <header class="section-header">
           <div>
-            <p class="section-kicker">Device Edit</p>
-            <h3>编辑 {{ editingDevice.deviceCode }}</h3>
+            <p class="section-kicker">Sensor Edit</p>
+            <h3>编辑 {{ editingSensor.sensorCode }}</h3>
           </div>
           <button class="ghost-button" type="button" @click="closeEditModal">关闭</button>
         </header>
 
         <div class="form-grid">
           <label>
-            <span>设备名称</span>
-            <input v-model="editForm.deviceName" type="text" />
+            <span>传感器名称</span>
+            <input v-model="editForm.sensorName" type="text" />
           </label>
           <label>
             <span>安装位置</span>
@@ -267,20 +304,21 @@ import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import {
   clearSimulatorLogs,
-  deleteSimulatorDevice,
+  deleteSimulatorSensor,
   getSimulatorConfig,
-  getSimulatorDevices,
   getSimulatorLogs,
-  startSimulatorDevice,
-  stopSimulatorDevice,
+  getSimulatorSensors,
+  registerSimulatorSensor,
+  startSimulatorSensor,
+  stopSimulatorSensor,
   updateSimulatorConfig,
-  updateSimulatorDevice,
+  updateSimulatorSensor,
 } from "@/services/api/simulatorService";
 import type {
   DashboardStat,
   SimulatorBrokerConfig,
-  SimulatorDevice,
   SimulatorLogEntry,
+  SimulatorSensor,
 } from "@/types/models";
 
 const config = reactive<SimulatorBrokerConfig>({
@@ -301,8 +339,21 @@ const configForm = reactive({
   password: "",
 });
 
+const createForm = reactive({
+  sensorCode: "",
+  sensorName: "",
+  location: "",
+  baseLight: 120,
+  variance: 35,
+  voltageBase: 220.5,
+  telemetryIntervalSeconds: 5,
+  statusEvery: 1,
+  online: true,
+  autoStart: true,
+});
+
 const editForm = reactive({
-  deviceName: "",
+  sensorName: "",
   location: "",
   baseLight: 120,
   variance: 35,
@@ -313,34 +364,36 @@ const editForm = reactive({
   running: true,
 });
 
-const devices = ref<SimulatorDevice[]>([]);
+const sensors = ref<SimulatorSensor[]>([]);
 const logs = ref<SimulatorLogEntry[]>([]);
 const refreshing = ref(false);
 const refreshingLogs = ref(false);
 const savingConfig = ref(false);
 const clearingLogs = ref(false);
+const creatingSensor = ref(false);
 const savingEdit = ref(false);
-const pendingDeviceId = ref<number | null>(null);
+const pendingSensorId = ref<number | null>(null);
 const logLevelFilter = ref("");
-const editingDevice = ref<SimulatorDevice | null>(null);
+const createMessage = ref("");
+const editingSensor = ref<SimulatorSensor | null>(null);
 let autoRefreshTimer: number | undefined;
 
 const summaryStats = computed<DashboardStat[]>(() => [
-  { label: "模拟设备数", value: String(devices.value.length), helper: "当前纳入控制台的设备" },
+  { label: "模拟传感器数", value: String(sensors.value.length), helper: "当前纳入控制台的传感器" },
   {
-    label: "运行中设备",
-    value: String(devices.value.filter((item) => item.running).length),
+    label: "运行中传感器",
+    value: String(sensors.value.filter((item) => item.running).length),
     helper: "正在持续发送 telemetry/status",
+  },
+  {
+    label: "已绑定路灯",
+    value: String(sensors.value.filter((item) => item.boundDeviceId != null).length),
+    helper: "绑定后数据才会生效",
   },
   {
     label: "Broker 连接",
     value: config.connected ? "已连接" : "未连接",
     helper: `${config.host || "--"}:${config.port || 0}`,
-  },
-  {
-    label: "当前日志数",
-    value: String(logs.value.length),
-    helper: logLevelFilter.value ? `${logLevelFilter.value} 级别日志` : "最近 120 条运行日志",
   },
 ]);
 
@@ -352,16 +405,29 @@ function syncConfigForm() {
   configForm.password = config.password;
 }
 
-function fillEditForm(device: SimulatorDevice) {
-  editForm.deviceName = device.deviceName;
-  editForm.location = device.location;
-  editForm.baseLight = device.baseLight;
-  editForm.variance = device.variance;
-  editForm.voltageBase = device.voltageBase;
-  editForm.telemetryIntervalSeconds = device.telemetryIntervalSeconds;
-  editForm.statusEvery = device.statusEvery;
-  editForm.online = device.online;
-  editForm.running = device.running;
+function resetCreateForm() {
+  createForm.sensorCode = "";
+  createForm.sensorName = "";
+  createForm.location = "";
+  createForm.baseLight = 120;
+  createForm.variance = 35;
+  createForm.voltageBase = 220.5;
+  createForm.telemetryIntervalSeconds = 5;
+  createForm.statusEvery = 1;
+  createForm.online = true;
+  createForm.autoStart = true;
+}
+
+function fillEditForm(sensor: SimulatorSensor) {
+  editForm.sensorName = sensor.sensorName;
+  editForm.location = sensor.location;
+  editForm.baseLight = sensor.baseLight;
+  editForm.variance = sensor.variance;
+  editForm.voltageBase = sensor.voltageBase;
+  editForm.telemetryIntervalSeconds = sensor.telemetryIntervalSeconds;
+  editForm.statusEvery = sensor.statusEvery;
+  editForm.online = sensor.online;
+  editForm.running = sensor.running;
 }
 
 async function loadLogs() {
@@ -376,14 +442,10 @@ async function loadLogs() {
 async function loadConsoleData() {
   refreshing.value = true;
   try {
-    const [nextConfig, nextDevices] = await Promise.all([
-      getSimulatorConfig(),
-      getSimulatorDevices(),
-    ]);
-
+    const [nextConfig, nextSensors] = await Promise.all([getSimulatorConfig(), getSimulatorSensors()]);
     Object.assign(config, nextConfig);
     syncConfigForm();
-    devices.value = nextDevices;
+    sensors.value = nextSensors;
     await loadLogs();
   } finally {
     refreshing.value = false;
@@ -410,24 +472,55 @@ async function handleSaveConfig() {
   }
 }
 
-function openEditModal(device: SimulatorDevice) {
-  editingDevice.value = device;
-  fillEditForm(device);
+async function handleCreateSensor() {
+  if (!createForm.sensorCode.trim() || !createForm.sensorName.trim()) {
+    createMessage.value = "请先填写传感器编码和名称";
+    return;
+  }
+
+  creatingSensor.value = true;
+  createMessage.value = "";
+  try {
+    await registerSimulatorSensor({
+      sensorCode: createForm.sensorCode.trim(),
+      sensorName: createForm.sensorName.trim(),
+      location: createForm.location.trim(),
+      baseLight: Number(createForm.baseLight),
+      variance: Number(createForm.variance),
+      voltageBase: Number(createForm.voltageBase),
+      telemetryIntervalSeconds: Number(createForm.telemetryIntervalSeconds),
+      statusEvery: Number(createForm.statusEvery),
+      online: createForm.online,
+      autoStart: createForm.autoStart,
+    });
+    resetCreateForm();
+    createMessage.value = "传感器已注册。绑定路灯前，其上报数据不会被系统接收。";
+    await loadConsoleData();
+  } catch (error) {
+    createMessage.value = error instanceof Error ? error.message : "传感器注册失败";
+  } finally {
+    creatingSensor.value = false;
+  }
+}
+
+function openEditModal(sensor: SimulatorSensor) {
+  editingSensor.value = sensor;
+  fillEditForm(sensor);
 }
 
 function closeEditModal() {
-  editingDevice.value = null;
+  editingSensor.value = null;
 }
 
 async function handleSaveEdit() {
-  if (!editingDevice.value) {
+  if (!editingSensor.value) {
     return;
   }
 
   savingEdit.value = true;
   try {
-    await updateSimulatorDevice(editingDevice.value.deviceId, {
-      deviceName: editForm.deviceName.trim(),
+    await updateSimulatorSensor(editingSensor.value.sensorId, {
+      sensorName: editForm.sensorName.trim(),
       location: editForm.location.trim(),
       baseLight: Number(editForm.baseLight),
       variance: Number(editForm.variance),
@@ -440,44 +533,44 @@ async function handleSaveEdit() {
     closeEditModal();
     await loadConsoleData();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "保存设备参数失败");
+    window.alert(error instanceof Error ? error.message : "保存传感器参数失败");
   } finally {
     savingEdit.value = false;
   }
 }
 
-async function toggleDevice(device: SimulatorDevice) {
-  pendingDeviceId.value = device.deviceId;
+async function toggleSensor(sensor: SimulatorSensor) {
+  pendingSensorId.value = sensor.sensorId;
   try {
-    if (device.running) {
-      await stopSimulatorDevice(device.deviceId);
+    if (sensor.running) {
+      await stopSimulatorSensor(sensor.sensorId);
     } else {
-      await startSimulatorDevice(device.deviceId);
+      await startSimulatorSensor(sensor.sensorId);
     }
     await loadConsoleData();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "切换设备运行状态失败");
+    window.alert(error instanceof Error ? error.message : "切换传感器运行状态失败");
   } finally {
-    pendingDeviceId.value = null;
+    pendingSensorId.value = null;
   }
 }
 
-async function handleDeleteDevice(device: SimulatorDevice) {
-  if (!window.confirm(`确认删除设备 ${device.deviceCode} 吗？这会同步删除数据库中的设备记录。`)) {
+async function handleDeleteSensor(sensor: SimulatorSensor) {
+  if (!window.confirm(`确认删除传感器 ${sensor.sensorCode} 吗？`)) {
     return;
   }
 
-  pendingDeviceId.value = device.deviceId;
+  pendingSensorId.value = sensor.sensorId;
   try {
-    await deleteSimulatorDevice(device.deviceId);
-    if (editingDevice.value?.deviceId === device.deviceId) {
+    await deleteSimulatorSensor(sensor.sensorId);
+    if (editingSensor.value?.sensorId === sensor.sensorId) {
       closeEditModal();
     }
     await loadConsoleData();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "删除设备失败");
+    window.alert(error instanceof Error ? error.message : "删除传感器失败");
   } finally {
-    pendingDeviceId.value = null;
+    pendingSensorId.value = null;
   }
 }
 
@@ -514,3 +607,58 @@ onBeforeUnmount(() => {
   }
 });
 </script>
+
+<style scoped>
+.simulator-actions-row,
+.simulator-device-actions {
+  flex-wrap: wrap;
+}
+
+.table-cell-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.simulator-log-list {
+  display: grid;
+  gap: 12px;
+}
+
+.simulator-log-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.simulator-log-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.simulator-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 40;
+}
+
+.simulator-modal {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 18px;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+</style>

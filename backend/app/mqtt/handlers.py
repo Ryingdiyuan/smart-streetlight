@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,9 @@ from app.core.database import SessionLocal
 from app.models.alarm_log import AlarmLog
 from app.models.device import Device
 from app.models.light_data import LightData
-from app.services.auto_control import evaluate_auto_control
+from app.models.sensor import Sensor
+from app.services.auto_control import ACTION_TURN_OFF, ACTION_TURN_ON, evaluate_auto_control
+from app.services.lamp_control import apply_lamp_command
 
 logger = logging.getLogger(__name__)
 
@@ -30,48 +32,8 @@ def parse_reported_at(value: Any) -> datetime:
         except ValueError:
             continue
 
-    logger.warning("Invalid telemetry timestamp %s, using current time", value)
+    logger.warning("Invalid MQTT timestamp %s, using current time", value)
     return datetime.utcnow()
-
-
-def handle_telemetry_payload(payload: dict[str, Any], db: Session) -> None:
-    device_code = payload.get("deviceId") or payload.get("device_code")
-    if not device_code:
-        logger.warning("Telemetry payload missing deviceId: %s", payload)
-        return
-
-    light_intensity = payload.get("lightIntensity")
-    if light_intensity is None:
-        logger.warning("Telemetry payload missing lightIntensity: %s", payload)
-        return
-
-    device = db.query(Device).filter(Device.device_code == device_code).first()
-    if device is None:
-        logger.warning("Telemetry device not registered: %s", device_code)
-        return
-
-    voltage = payload.get("voltage")
-    light_data = LightData(
-        device_id=device.id,
-        light_intensity=int(light_intensity),
-        lamp_status=payload.get("lampStatus") or "off",
-        voltage=float(voltage) if voltage is not None else None,
-        reported_at=parse_reported_at(payload.get("timestamp")),
-    )
-    db.add(light_data)
-    db.commit()
-    db.refresh(light_data)
-
-    suggested_action = evaluate_auto_control(
-        db,
-        device.id,
-        light_data.light_intensity,
-    )
-    logger.info(
-        "Saved MQTT telemetry for device %s, suggested_action=%s",
-        device_code,
-        suggested_action,
-    )
 
 
 def parse_online_status(value: Any) -> bool:
@@ -84,94 +46,197 @@ def parse_online_status(value: Any) -> bool:
     return bool(value)
 
 
-def handle_status_payload(payload: dict[str, Any], db: Session) -> None:
-    device_code = payload.get("deviceId") or payload.get("device_code")
-    if not device_code:
-        logger.warning("Status payload missing deviceId: %s", payload)
+def extract_sensor_code(payload: dict[str, Any]) -> str | None:
+    for key in ("sensorId", "sensor_code", "sensorCode", "deviceId", "device_code"):
+        value = payload.get(key)
+        if value:
+            return str(value).strip()
+    return None
+
+
+def get_sensor_by_payload(db: Session, payload: dict[str, Any]) -> Sensor | None:
+    sensor_code = extract_sensor_code(payload)
+    if not sensor_code:
+        return None
+    return db.query(Sensor).filter(Sensor.sensor_code == sensor_code).first()
+
+
+def get_bound_device(db: Session, sensor_id: int) -> Device | None:
+    return db.query(Device).filter(Device.sensor_id == sensor_id).first()
+
+
+def handle_register_payload(payload: dict[str, Any], db: Session) -> None:
+    sensor_code = extract_sensor_code(payload)
+    if not sensor_code:
+        logger.warning("Register payload missing sensor code: %s", payload)
         return
 
-    device = db.query(Device).filter(Device.device_code == device_code).first()
-    if device is None:
-        logger.warning("Status device not registered: %s", device_code)
+    sensor_name = payload.get("sensorName") or payload.get("sensor_name") or sensor_code
+    sensor = db.query(Sensor).filter(Sensor.sensor_code == sensor_code).first()
+    created = sensor is None
+
+    if sensor is None:
+        sensor = Sensor(
+            sensor_code=sensor_code,
+            sensor_name=str(sensor_name),
+        )
+        db.add(sensor)
+
+    sensor.sensor_name = str(sensor_name)
+    sensor.location = payload.get("location") or sensor.location
+    sensor.latitude = payload.get("latitude", sensor.latitude)
+    sensor.longitude = payload.get("longitude", sensor.longitude)
+    sensor.status = "online" if parse_online_status(payload.get("online")) else "offline"
+    sensor.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
+
+    db.commit()
+    db.refresh(sensor)
+    logger.info("Sensor %s via register topic: %s", sensor.sensor_code, "created" if created else "updated")
+
+
+def handle_telemetry_payload(payload: dict[str, Any], db: Session) -> None:
+    sensor = get_sensor_by_payload(db, payload)
+    sensor_code = extract_sensor_code(payload)
+    if sensor is None:
+        logger.warning("Telemetry sensor not registered: %s", sensor_code or payload)
+        return
+
+    light_intensity = payload.get("lightIntensity")
+    if light_intensity is None:
+        logger.warning("Telemetry payload missing lightIntensity: %s", payload)
+        return
+
+    sensor.status = "online"
+    sensor.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
+    bound_device = get_bound_device(db, sensor.id)
+    if bound_device is None:
+        db.commit()
+        logger.info("Drop telemetry from unbound sensor %s", sensor.sensor_code)
+        return
+
+    voltage = payload.get("voltage")
+    lamp_status = str(payload.get("lampStatus") or bound_device.lamp_status or "OFF").upper()
+
+    light_data = LightData(
+        device_id=bound_device.id,
+        light_intensity=int(light_intensity),
+        lamp_status=lamp_status.lower(),
+        voltage=float(voltage) if voltage is not None else None,
+        reported_at=parse_reported_at(payload.get("timestamp")),
+    )
+    db.add(light_data)
+
+    bound_device.status = "online"
+    bound_device.last_heartbeat_at = sensor.last_heartbeat_at
+    bound_device.lamp_status = lamp_status
+
+    suggested_action = evaluate_auto_control(db, bound_device.id, light_data.light_intensity)
+    if bound_device.control_mode == "auto" and suggested_action in {ACTION_TURN_ON, ACTION_TURN_OFF}:
+        desired_lamp_status = "ON" if suggested_action == ACTION_TURN_ON else "OFF"
+        if bound_device.lamp_status != desired_lamp_status:
+            apply_lamp_command(
+                db,
+                bound_device,
+                command=suggested_action,
+                source="auto",
+            )
+
+    db.commit()
+    db.refresh(light_data)
+    logger.info(
+        "Saved telemetry for sensor %s bound to device %s",
+        sensor.sensor_code,
+        bound_device.device_code,
+    )
+
+
+def handle_status_payload(payload: dict[str, Any], db: Session) -> None:
+    sensor = get_sensor_by_payload(db, payload)
+    sensor_code = extract_sensor_code(payload)
+    if sensor is None:
+        logger.warning("Status sensor not registered: %s", sensor_code or payload)
         return
 
     is_online = parse_online_status(payload.get("online"))
-    device.status = "online" if is_online else "offline"
-    device.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
+    sensor.status = "online" if is_online else "offline"
+    sensor.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
 
-    if is_online:
-        (
-            db.query(AlarmLog)
-            .filter(
-                AlarmLog.device_id == device.id,
-                AlarmLog.alarm_type == "offline",
-                AlarmLog.handled.is_(False),
+    bound_device = get_bound_device(db, sensor.id)
+    if bound_device is not None:
+        bound_device.status = sensor.status
+        bound_device.last_heartbeat_at = sensor.last_heartbeat_at
+        if payload.get("lampStatus"):
+            bound_device.lamp_status = str(payload["lampStatus"]).upper()
+
+        if is_online:
+            (
+                db.query(AlarmLog)
+                .filter(
+                    AlarmLog.device_id == bound_device.id,
+                    AlarmLog.alarm_type == "offline",
+                    AlarmLog.handled.is_(False),
+                )
+                .update(
+                    {
+                        AlarmLog.handled: True,
+                        AlarmLog.handled_at: datetime.utcnow(),
+                    },
+                    synchronize_session=False,
+                )
             )
-            .update(
-                {
-                    AlarmLog.handled: True,
-                    AlarmLog.handled_at: datetime.utcnow(),
-                },
-                synchronize_session=False,
-            )
-        )
 
     db.commit()
-    db.refresh(device)
-    logger.info("Updated device status from MQTT status topic: %s -> %s", device_code, device.status)
+    logger.info("Updated status from sensor %s to %s", sensor.sensor_code, sensor.status)
+
+
+def decode_payload(payload_bytes: bytes, topic: str, kind: str) -> dict[str, Any] | None:
+    try:
+        payload_text = payload_bytes.decode("utf-8")
+        payload = json.loads(payload_text)
+    except UnicodeDecodeError:
+        logger.warning("%s payload is not valid UTF-8, topic=%s", kind, topic)
+        return None
+    except json.JSONDecodeError:
+        logger.warning("%s payload is not valid JSON, topic=%s", kind, topic)
+        return None
+
+    if not isinstance(payload, dict):
+        logger.warning("%s payload is not a JSON object, topic=%s", kind, topic)
+        return None
+    return payload
+
+
+def process_message(
+    topic: str,
+    payload_bytes: bytes,
+    *,
+    kind: str,
+    handler: Callable[[dict[str, Any], Session], None],
+) -> None:
+    payload = decode_payload(payload_bytes, topic, kind)
+    if payload is None:
+        return
+
+    db = SessionLocal()
+    try:
+        handler(payload, db)
+    except (TypeError, ValueError):
+        db.rollback()
+        logger.exception("Invalid %s payload, topic=%s payload=%s", kind, topic, payload)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to process %s message, topic=%s", kind, topic)
+    finally:
+        db.close()
+
+
+def handle_register_message(topic: str, payload_bytes: bytes) -> None:
+    process_message(topic, payload_bytes, kind="register", handler=handle_register_payload)
 
 
 def handle_telemetry_message(topic: str, payload_bytes: bytes) -> None:
-    try:
-        payload_text = payload_bytes.decode("utf-8")
-        payload = json.loads(payload_text)
-    except UnicodeDecodeError:
-        logger.warning("Telemetry payload is not valid UTF-8, topic=%s", topic)
-        return
-    except json.JSONDecodeError:
-        logger.warning("Telemetry payload is not valid JSON, topic=%s", topic)
-        return
-
-    if not isinstance(payload, dict):
-        logger.warning("Telemetry payload is not a JSON object, topic=%s", topic)
-        return
-
-    db = SessionLocal()
-    try:
-        handle_telemetry_payload(payload, db)
-    except (TypeError, ValueError):
-        db.rollback()
-        logger.exception("Invalid telemetry payload, topic=%s payload=%s", topic, payload)
-    except Exception:
-        db.rollback()
-        logger.exception("Failed to save MQTT telemetry, topic=%s", topic)
-    finally:
-        db.close()
+    process_message(topic, payload_bytes, kind="telemetry", handler=handle_telemetry_payload)
 
 
 def handle_status_message(topic: str, payload_bytes: bytes) -> None:
-    try:
-        payload_text = payload_bytes.decode("utf-8")
-        payload = json.loads(payload_text)
-    except UnicodeDecodeError:
-        logger.warning("Status payload is not valid UTF-8, topic=%s", topic)
-        return
-    except json.JSONDecodeError:
-        logger.warning("Status payload is not valid JSON, topic=%s", topic)
-        return
-
-    if not isinstance(payload, dict):
-        logger.warning("Status payload is not a JSON object, topic=%s", topic)
-        return
-
-    db = SessionLocal()
-    try:
-        handle_status_payload(payload, db)
-    except (TypeError, ValueError):
-        db.rollback()
-        logger.exception("Invalid status payload, topic=%s payload=%s", topic, payload)
-    except Exception:
-        db.rollback()
-        logger.exception("Failed to save MQTT status, topic=%s", topic)
-    finally:
-        db.close()
+    process_message(topic, payload_bytes, kind="status", handler=handle_status_payload)
