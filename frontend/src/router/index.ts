@@ -32,7 +32,7 @@ const router = createRouter({
           path: "",
           name: "dashboard",
           component: DashboardPage,
-          meta: { title: "总览大屏", roles: allRoles },
+          meta: { title: "总览大屏", roles: allRoles, bigscreen: true },
         },
         {
           path: "software-devices",
