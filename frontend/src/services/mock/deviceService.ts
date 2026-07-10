@@ -112,6 +112,8 @@ export async function createDevice(data: {
   location?: string;
   latitude?: number;
   longitude?: number;
+  sensor_id?: number;
+  control_mode?: "manual" | "auto";
 }): Promise<Device> {
   await delay();
 
@@ -130,6 +132,8 @@ export async function createDevice(data: {
     status: "offline",
     lampStatus: "OFF",
     lastHeartbeatAt: "--",
+    controlMode: data.control_mode ?? "manual",
+    sensorId: data.sensor_id,
   };
 
   const createdDetail: DeviceDetail = {
@@ -153,7 +157,14 @@ export async function createDevice(data: {
 
 export async function updateDevice(
   id: number,
-  data: { latitude?: number; longitude?: number; device_name?: string; location?: string },
+  data: {
+    latitude?: number;
+    longitude?: number;
+    device_name?: string;
+    location?: string;
+    sensor_id?: number;
+    control_mode?: "manual" | "auto";
+  },
 ): Promise<Device> {
   await delay();
   const device = mockDevices.find((d) => d.id === id);
@@ -162,12 +173,16 @@ export async function updateDevice(
   if (data.longitude !== undefined) device.longitude = data.longitude;
   if (data.device_name) device.deviceName = data.device_name;
   if (data.location !== undefined) device.location = data.location;
+  if (data.sensor_id !== undefined) device.sensorId = data.sensor_id;
+  if (data.control_mode !== undefined) device.controlMode = data.control_mode;
 
   // Also update in mockDeviceDetails
   const detail = mockDeviceDetails[id];
   if (detail) {
     if (data.latitude !== undefined) detail.latitude = data.latitude;
     if (data.longitude !== undefined) detail.longitude = data.longitude;
+    if (data.sensor_id !== undefined) detail.sensorId = data.sensor_id;
+    if (data.control_mode !== undefined) detail.controlMode = data.control_mode;
   }
 
   return structuredClone(device);

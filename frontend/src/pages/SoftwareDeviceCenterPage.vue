@@ -3,10 +3,10 @@
     <header class="section-header">
       <div>
         <p class="section-kicker">Software Module</p>
-        <h3>软件设备中心</h3>
+        <h3>路灯管理中心</h3>
       </div>
       <p class="section-note">
-        面向实际软件功能的设备建档入口。这里负责设备档案创建、坐标录入和业务页面跳转，不承担模拟器运行与 MQTT 联调职责。
+        业务前端仅维护路灯档案。传感器需先在硬件模拟器注册，再在这里绑定到路灯后，系统才会接收该传感器数据。
       </p>
     </header>
 
@@ -15,14 +15,14 @@
     </div>
 
     <div class="content-grid two-columns">
-      <PanelCard title="新增设备档案" subtitle="创建后写入数据库，可在设备列表、地图和详情页使用">
+      <PanelCard title="新增路灯档案" subtitle="创建路灯并可直接绑定已注册传感器">
         <div class="form-grid">
           <label>
-            <span>设备编码</span>
+            <span>路灯编码</span>
             <input v-model="createForm.deviceCode" type="text" placeholder="例如 SL-010" />
           </label>
           <label>
-            <span>设备名称</span>
+            <span>路灯名称</span>
             <input v-model="createForm.deviceName" type="text" placeholder="例如 图书馆路灯" />
           </label>
           <label>
@@ -37,50 +37,72 @@
             <span>经度</span>
             <input v-model.number="createForm.longitude" type="number" step="any" placeholder="例如 106.528000" />
           </label>
+          <label>
+            <span>绑定传感器</span>
+            <select v-model="createForm.sensorId">
+              <option :value="undefined">暂不绑定</option>
+              <option v-for="sensor in availableSensors" :key="sensor.id" :value="sensor.id">
+                {{ sensor.sensorCode }} - {{ sensor.sensorName }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span>控制模式</span>
+            <select v-model="createForm.controlMode">
+              <option value="manual">手动控制</option>
+              <option value="auto">自动控制</option>
+            </select>
+          </label>
         </div>
 
         <div class="button-row software-device-actions">
           <button class="primary-button" type="button" :disabled="saving" @click="handleCreateDevice">
-            {{ saving ? "创建中..." : "创建设备档案" }}
+            {{ saving ? "创建中..." : "创建路灯档案" }}
+          </button>
+          <button class="ghost-button" type="button" :disabled="loadingSensors" @click="loadSensors">
+            {{ loadingSensors ? "刷新中..." : "刷新传感器" }}
           </button>
           <RouterLink class="ghost-button" to="/map">去地图选点</RouterLink>
-          <span class="inline-note">硬件联调能力已拆分为独立前端项目，不再和软件业务前端混合展示。</span>
         </div>
 
+        <p class="inline-note">
+          说明：未绑定传感器的路灯不会接收硬件数据；自动模式会根据阈值自动下发开关灯命令。
+        </p>
         <p v-if="message" class="software-device-message">{{ message }}</p>
       </PanelCard>
 
-      <PanelCard title="业务入口" subtitle="当前只保留软件业务功能入口">
+      <PanelCard title="业务入口" subtitle="保留路灯业务管理，不承担硬件模拟职责">
         <div class="software-entry-list">
           <RouterLink class="software-entry-card" to="/devices">
-            <strong>设备列表</strong>
-            <span>查看设备档案、状态、批量控制与详情页。</span>
+            <strong>路灯列表</strong>
+            <span>查看路灯状态、绑定关系、批量控制与详情。</span>
           </RouterLink>
           <RouterLink class="software-entry-card" to="/map">
-            <strong>设备地图</strong>
-            <span>查看 GIS 分布、录入或修正设备坐标。</span>
+            <strong>路灯地图</strong>
+            <span>查看 GIS 分布与维护坐标信息。</span>
           </RouterLink>
           <RouterLink class="software-entry-card" to="/realtime-light">
             <strong>实时光照监测</strong>
-            <span>查看传感器实时上报和当前灯状态。</span>
+            <span>查看绑定传感器生效后的实时上报数据。</span>
           </RouterLink>
         </div>
       </PanelCard>
     </div>
 
-    <PanelCard title="最近设备档案" subtitle="优先展示最近创建或编号较新的设备">
-      <div v-if="loading" class="placeholder-box">正在加载设备档案...</div>
+    <PanelCard title="最近路灯档案" subtitle="优先显示最近创建的路灯与当前绑定状态">
+      <div v-if="loading" class="placeholder-box">正在加载路灯档案...</div>
       <div v-else-if="loadError" class="placeholder-box">{{ loadError }}</div>
       <div v-else class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>设备编码</th>
-              <th>设备名称</th>
+              <th>路灯编码</th>
+              <th>路灯名称</th>
               <th>安装位置</th>
-              <th>坐标状态</th>
+              <th>绑定传感器</th>
+              <th>控制模式</th>
               <th>在线状态</th>
-              <th>路灯状态</th>
+              <th>灯状态</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -89,23 +111,13 @@
               <td>{{ device.deviceCode }}</td>
               <td>{{ device.deviceName }}</td>
               <td>{{ device.location }}</td>
+              <td>{{ device.sensorCode || "未绑定" }}</td>
+              <td>{{ device.controlMode === "auto" ? "自动" : "手动" }}</td>
               <td>
-                <StatusBadge
-                  :status="device.latitude != null && device.longitude != null ? 'success' : 'warning'"
-                  :text="device.latitude != null && device.longitude != null ? '已录坐标' : '待补坐标'"
-                />
+                <StatusBadge :status="device.status" :text="device.status === 'online' ? '在线' : '离线'" />
               </td>
               <td>
-                <StatusBadge
-                  :status="device.status"
-                  :text="device.status === 'online' ? '在线' : '离线'"
-                />
-              </td>
-              <td>
-                <StatusBadge
-                  :status="device.lampStatus === 'ON' ? 'success' : 'info'"
-                  :text="device.lampStatus"
-                />
+                <StatusBadge :status="device.lampStatus === 'ON' ? 'success' : 'info'" :text="device.lampStatus" />
               </td>
               <td>
                 <div class="button-row software-table-actions">
@@ -115,7 +127,7 @@
               </td>
             </tr>
             <tr v-if="!recentDevices.length">
-              <td colspan="7" class="table-empty">暂无设备档案</td>
+              <td colspan="8" class="table-empty">暂无路灯档案</td>
             </tr>
           </tbody>
         </table>
@@ -132,11 +144,14 @@ import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import { createDevice, getDeviceList } from "@/services/deviceService";
-import type { DashboardStat, Device } from "@/types/models";
+import { getSensorList } from "@/services/sensorService";
+import type { DashboardStat, Device, SensorSummary } from "@/types/models";
 
 const router = useRouter();
 const devices = ref<Device[]>([]);
+const availableSensors = ref<SensorSummary[]>([]);
 const loading = ref(true);
+const loadingSensors = ref(false);
 const saving = ref(false);
 const loadError = ref("");
 const message = ref("");
@@ -147,24 +162,26 @@ const createForm = reactive({
   location: "",
   latitude: undefined as number | undefined,
   longitude: undefined as number | undefined,
+  sensorId: undefined as number | undefined,
+  controlMode: "manual" as "manual" | "auto",
 });
 
 const summaryStats = computed<DashboardStat[]>(() => [
-  { label: "设备总数", value: String(devices.value.length), helper: "当前数据库中的设备档案" },
+  { label: "路灯总数", value: String(devices.value.length), helper: "当前数据库中的路灯档案" },
   {
-    label: "已录坐标",
-    value: String(devices.value.filter((device) => device.latitude != null && device.longitude != null).length),
-    helper: "已可用于地图展示",
+    label: "已绑定传感器",
+    value: String(devices.value.filter((device) => device.sensorId != null).length),
+    helper: "绑定后才会接收硬件数据",
   },
   {
-    label: "待补坐标",
-    value: String(devices.value.filter((device) => device.latitude == null || device.longitude == null).length),
-    helper: "建议在地图页继续完善位置",
+    label: "自动模式",
+    value: String(devices.value.filter((device) => device.controlMode === "auto").length),
+    helper: "达到阈值会自动控制开关灯",
   },
   {
-    label: "在线设备",
+    label: "在线路灯",
     value: String(devices.value.filter((device) => device.status === "online").length),
-    helper: "来自系统当前设备状态",
+    helper: "来自已绑定传感器的实时状态",
   },
 ]);
 
@@ -189,6 +206,8 @@ function resetCreateForm() {
   createForm.location = "";
   createForm.latitude = undefined;
   createForm.longitude = undefined;
+  createForm.sensorId = undefined;
+  createForm.controlMode = "manual";
 }
 
 async function loadDevices() {
@@ -198,15 +217,26 @@ async function loadDevices() {
     devices.value = await getDeviceList();
   } catch (error) {
     devices.value = [];
-    loadError.value = `设备档案加载失败：${getErrorMessage(error)}`;
+    loadError.value = `路灯档案加载失败：${getErrorMessage(error)}`;
   } finally {
     loading.value = false;
   }
 }
 
+async function loadSensors() {
+  loadingSensors.value = true;
+  try {
+    availableSensors.value = await getSensorList({ onlyUnbound: true, onlyOnline: true });
+  } catch (error) {
+    message.value = `传感器列表加载失败：${getErrorMessage(error)}`;
+  } finally {
+    loadingSensors.value = false;
+  }
+}
+
 async function handleCreateDevice() {
   if (!createForm.deviceCode.trim() || !createForm.deviceName.trim()) {
-    message.value = "设备编码和设备名称不能为空";
+    message.value = "路灯编码和路灯名称不能为空";
     return;
   }
 
@@ -219,10 +249,12 @@ async function handleCreateDevice() {
       location: createForm.location.trim() || undefined,
       latitude: createForm.latitude,
       longitude: createForm.longitude,
+      sensor_id: createForm.sensorId,
+      control_mode: createForm.controlMode,
     });
     resetCreateForm();
-    message.value = "设备档案已创建，可继续去地图或详情页完善信息";
-    await loadDevices();
+    message.value = "路灯档案已创建。若已绑定传感器，后续该传感器上报会立即生效。";
+    await Promise.all([loadDevices(), loadSensors()]);
     await router.push(`/devices/${createdDevice.id}`);
   } catch (error) {
     message.value = getErrorMessage(error);
@@ -232,7 +264,7 @@ async function handleCreateDevice() {
 }
 
 onMounted(() => {
-  void loadDevices();
+  void Promise.all([loadDevices(), loadSensors()]);
 });
 </script>
 

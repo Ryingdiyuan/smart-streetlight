@@ -1,9 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_admin, require_user_or_above
 from app.models.device import Device
+from app.models.sensor import Sensor
 from app.models.light_data import LightData
 from app.models.threshold_config import ThresholdConfig
 from app.models.control_log import ControlLog
@@ -11,6 +14,7 @@ from app.models.alarm_log import AlarmLog
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
 
 router = APIRouter(prefix="/devices", tags=["devices"])
+logger = logging.getLogger(__name__)
 
 
 def get_device_or_404(db: Session, device_id: int) -> Device:
@@ -39,12 +43,68 @@ def ensure_device_code_unique(
         )
 
 
+def ensure_sensor_bindable(db: Session, sensor_id: int, device_id: int | None = None) -> Sensor:
+    sensor = db.get(Sensor, sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="绑定的传感器不存在")
+
+    if not sensor.online or str(sensor.status).lower() != "online":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="传感器当前离线，无法绑定到新路灯，请先恢复在线状态",
+        )
+
+    bound_query = db.query(Device).filter(Device.sensor_id == sensor_id)
+    if device_id is not None:
+        bound_query = bound_query.filter(Device.id != device_id)
+    bound_device = bound_query.first()
+    if bound_device is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"传感器已绑定路灯 {bound_device.device_code}",
+        )
+
+    return sensor
+
+
+def serialize_device(db: Session, device: Device) -> dict:
+    sensor = db.get(Sensor, device.sensor_id) if device.sensor_id is not None else None
+    return {
+        "id": device.id,
+        "device_code": device.device_code,
+        "device_name": device.device_name,
+        "location": device.location,
+        "latitude": device.latitude,
+        "longitude": device.longitude,
+        "status": device.status,
+        "sensor_id": device.sensor_id,
+        "sensor_code": sensor.sensor_code if sensor else None,
+        "sensor_name": sensor.sensor_name if sensor else None,
+        "lamp_status": device.lamp_status,
+        "control_mode": device.control_mode,
+        "last_heartbeat_at": device.last_heartbeat_at,
+    }
+
+
 @router.get("", response_model=list[DeviceRead])
 def list_devices(
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_user_or_above),
-) -> list[Device]:
-    return db.query(Device).order_by(Device.id.asc()).all()
+) -> list[dict]:
+    devices = (
+        db.query(Device)
+        .filter(
+            Device.deleted_at.is_(None),
+            Device.device_code.is_not(None),
+            Device.device_name.is_not(None),
+        )
+        .order_by(Device.id.asc())
+        .all()
+    )
+    invalid_devices = [device.id for device in devices if not device.device_code]
+    if invalid_devices:
+        logger.warning("Device list contains invalid device_code rows: %s", invalid_devices)
+    return [serialize_device(db, device) for device in devices]
 
 
 @router.get("/{device_id}", response_model=DeviceRead)
@@ -52,8 +112,8 @@ def get_device(
     device_id: int,
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_user_or_above),
-) -> Device:
-    return get_device_or_404(db, device_id)
+) -> dict:
+    return serialize_device(db, get_device_or_404(db, device_id))
 
 
 @router.post("", response_model=DeviceRead, status_code=status.HTTP_201_CREATED)
@@ -61,14 +121,17 @@ def create_device(
     device_create: DeviceCreate,
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_admin),
-) -> Device:
+) -> dict:
     ensure_device_code_unique(db, device_create.device_code)
+
+    if device_create.sensor_id is not None:
+        ensure_sensor_bindable(db, device_create.sensor_id)
 
     device = Device(**device_create.model_dump())
     db.add(device)
     db.commit()
     db.refresh(device)
-    return device
+    return serialize_device(db, device)
 
 
 @router.put("/{device_id}", response_model=DeviceRead)
@@ -77,19 +140,22 @@ def update_device(
     device_update: DeviceUpdate,
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_admin),
-) -> Device:
+) -> dict:
     device = get_device_or_404(db, device_id)
     update_data = device_update.model_dump(exclude_unset=True)
 
     if "device_code" in update_data:
         ensure_device_code_unique(db, update_data["device_code"], exclude_id=device_id)
 
+    if "sensor_id" in update_data and update_data["sensor_id"] is not None:
+        ensure_sensor_bindable(db, update_data["sensor_id"], device_id=device_id)
+
     for field, value in update_data.items():
         setattr(device, field, value)
 
     db.commit()
     db.refresh(device)
-    return device
+    return serialize_device(db, device)
 
 
 @router.delete("/{device_id}")

@@ -14,10 +14,12 @@ class SimulatorConfigRead(SimulatorConfigUpdate):
     connected: bool
 
 
-class SimulatorDeviceCreate(BaseModel):
-    device_code: str
-    device_name: str
+class SimulatorSensorCreate(BaseModel):
+    sensor_code: str
+    sensor_name: str
     location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     status: str = "offline"
     base_light: int = 120
     variance: int = 35
@@ -28,9 +30,11 @@ class SimulatorDeviceCreate(BaseModel):
     auto_start: bool = True
 
 
-class SimulatorDeviceUpdate(BaseModel):
-    device_name: str | None = None
+class SimulatorSensorUpdate(BaseModel):
+    sensor_name: str | None = None
     location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     status: str | None = None
     base_light: int | None = None
     variance: int | None = None
@@ -41,10 +45,10 @@ class SimulatorDeviceUpdate(BaseModel):
     running: bool | None = None
 
 
-class SimulatorDeviceRead(BaseModel):
-    device_id: int
-    device_code: str
-    device_name: str
+class SimulatorSensorRead(BaseModel):
+    sensor_id: int
+    sensor_code: str
+    sensor_name: str
     location: str | None = None
     running: bool
     online: bool
@@ -62,6 +66,10 @@ class SimulatorDeviceRead(BaseModel):
     last_status_at: str | None = None
     last_command_at: str | None = None
     last_command: str | None = None
+    bound_device_id: int | None = None
+    bound_device_code: str | None = None
+    bound_device_name: str | None = None
+    control_mode: str | None = None
 
 
 class SimulatorLogRead(BaseModel):

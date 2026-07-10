@@ -5,11 +5,12 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from app.core.config import settings
-from app.mqtt.handlers import handle_status_message, handle_telemetry_message
+from app.mqtt.handlers import handle_register_message, handle_status_message, handle_telemetry_message
 
 logger = logging.getLogger(__name__)
 TELEMETRY_TOPIC = "streetlight/+/telemetry"
 STATUS_TOPIC = "streetlight/+/status"
+REGISTER_TOPIC = "streetlight/+/register"
 
 
 def build_runtime_client_id() -> str:
@@ -67,9 +68,15 @@ class MqttClient:
             return
 
         self._connected = True
-        logger.info("MQTT connected, subscribing %s and %s", TELEMETRY_TOPIC, STATUS_TOPIC)
+        logger.info(
+            "MQTT connected, subscribing %s, %s and %s",
+            TELEMETRY_TOPIC,
+            STATUS_TOPIC,
+            REGISTER_TOPIC,
+        )
         client.subscribe(TELEMETRY_TOPIC)
         client.subscribe(STATUS_TOPIC)
+        client.subscribe(REGISTER_TOPIC)
 
     def _on_disconnect(
         self,
@@ -87,6 +94,8 @@ class MqttClient:
             handle_telemetry_message(message.topic, message.payload)
         elif message.topic.endswith("/status"):
             handle_status_message(message.topic, message.payload)
+        elif message.topic.endswith("/register"):
+            handle_register_message(message.topic, message.payload)
 
 
 mqtt_client = MqttClient()

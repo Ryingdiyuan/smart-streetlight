@@ -1,5 +1,6 @@
 export type DeviceStatus = "online" | "offline";
 export type LampStatus = "ON" | "OFF";
+export type ControlMode = "manual" | "auto";
 export type AlarmLevel = "INFO" | "WARN" | "CRITICAL";
 export type AlarmType = "DEVICE_OFFLINE" | "LIGHT_ABNORMAL" | "COMMAND_FAILED";
 export type CommandType = "TURN_ON" | "TURN_OFF" | "SET_BRIGHTNESS";
@@ -15,6 +16,21 @@ export interface Device {
   status: DeviceStatus;
   lampStatus: LampStatus;
   lastHeartbeatAt: string;
+  controlMode?: ControlMode;
+  sensorId?: number;
+  sensorCode?: string;
+  sensorName?: string;
+}
+
+export interface SensorSummary {
+  id: number;
+  sensorCode: string;
+  sensorName: string;
+  location: string;
+  status: DeviceStatus;
+  boundDeviceId?: number;
+  boundDeviceCode?: string;
+  boundDeviceName?: string;
 }
 
 export interface ThresholdConfig {

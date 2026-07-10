@@ -151,10 +151,10 @@ export interface SimulatorBrokerConfig {
   connected: boolean;
 }
 
-export interface SimulatorDevice {
-  deviceId: number;
-  deviceCode: string;
-  deviceName: string;
+export interface SimulatorSensor {
+  sensorId: number;
+  sensorCode: string;
+  sensorName: string;
   location: string;
   running: boolean;
   online: boolean;
@@ -172,6 +172,10 @@ export interface SimulatorDevice {
   lastStatusAt: string;
   lastCommandAt: string;
   lastCommand: string;
+  boundDeviceId?: number;
+  boundDeviceCode?: string;
+  boundDeviceName?: string;
+  controlMode?: "manual" | "auto";
 }
 
 export interface SimulatorLogEntry {

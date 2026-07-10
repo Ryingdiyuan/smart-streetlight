@@ -3,27 +3,27 @@
     <header class="section-header">
       <div>
         <p class="section-kicker">Devices</p>
-        <h3>设备列表</h3>
+        <h3>路灯列表</h3>
       </div>
-      <p class="section-note">已接入真实设备列表接口，支持按关键词与状态筛选，后台静默同步。</p>
+      <p class="section-note">查看路灯档案、绑定传感器、控制模式与在线状态。</p>
     </header>
 
     <div class="stats-grid">
       <StatCard v-for="item in summaryStats" :key="item.label" :stat="item" />
     </div>
 
-    <PanelCard title="设备筛选与列表" subtitle="支持关键词与状态筛选">
+    <PanelCard title="路灯筛选与列表" subtitle="支持按关键字与在线状态筛选">
       <div class="toolbar-row">
         <input
           v-model="keyword"
           class="search-input"
           type="text"
-          placeholder="搜索设备编号 / 名称 / 位置"
+          placeholder="搜索路灯编码 / 名称 / 位置 / 传感器编码"
         />
         <div class="toolbar-actions">
           <span class="section-note">{{ refreshStatusText }}</span>
           <button class="ghost-button" type="button" :disabled="refreshing" @click="loadDevices()">
-            {{ refreshing ? "同步中..." : "手动刷新" }}
+            {{ refreshing ? "刷新中..." : "手动刷新" }}
           </button>
           <button
             v-for="option in filterOptions"
@@ -37,48 +37,25 @@
         </div>
       </div>
 
-      <div v-if="loading && !devices.length" class="placeholder-box">正在加载真实设备数据...</div>
+      <div v-if="loading && !devices.length" class="placeholder-box">正在加载路灯数据...</div>
       <div v-else-if="loadError && !devices.length" class="placeholder-box">{{ loadError }}</div>
       <div v-else class="table-wrapper">
         <div v-if="loadError" class="placeholder-box">{{ loadError }}</div>
         <div v-if="canOperateDevices" class="bulk-action-bar">
           <div class="bulk-selection-summary">
-            <span class="section-note">已选中 {{ selectedCount }} 台设备</span>
-            <span v-if="areAllVisibleSelected && filteredDevices.length" class="inline-note">
-              当前筛选结果已全部选中
-            </span>
+            <span class="section-note">已选中 {{ selectedCount }} 盏路灯</span>
           </div>
           <div class="bulk-action-buttons">
-            <button
-              class="ghost-button"
-              type="button"
-              :disabled="batchSubmitting || !filteredDevices.length"
-              @click="selectAllVisible"
-            >
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !filteredDevices.length" @click="selectAllVisible">
               全选当前列表
             </button>
-            <button
-              class="ghost-button"
-              type="button"
-              :disabled="batchSubmitting || !selectedCount"
-              @click="clearSelection"
-            >
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="clearSelection">
               清空选择
             </button>
-            <button
-              class="primary-button"
-              type="button"
-              :disabled="batchSubmitting || !selectedCount"
-              @click="handleBatchCommand('TURN_ON')"
-            >
+            <button class="primary-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchCommand('TURN_ON')">
               {{ batchSubmitting ? "执行中..." : "批量开灯" }}
             </button>
-            <button
-              class="ghost-button"
-              type="button"
-              :disabled="batchSubmitting || !selectedCount"
-              @click="handleBatchCommand('TURN_OFF')"
-            >
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchCommand('TURN_OFF')">
               {{ batchSubmitting ? "执行中..." : "批量关灯" }}
             </button>
           </div>
@@ -90,15 +67,18 @@
         >
           {{ batchMessage }}
         </div>
+
         <table>
           <thead>
             <tr>
               <th v-if="canOperateDevices" class="table-checkbox">选择</th>
-              <th>设备编号</th>
-              <th>设备名称</th>
+              <th>路灯编码</th>
+              <th>路灯名称</th>
               <th>安装位置</th>
+              <th>绑定传感器</th>
+              <th>控制模式</th>
               <th>在线状态</th>
-              <th>路灯状态</th>
+              <th>灯状态</th>
               <th>最近心跳</th>
               <th>操作</th>
             </tr>
@@ -106,27 +86,18 @@
           <tbody>
             <tr v-for="device in filteredDevices" :key="device.id">
               <td v-if="canOperateDevices" class="table-checkbox">
-                <input
-                  v-model="selectedDeviceIds"
-                  type="checkbox"
-                  :value="device.id"
-                  :disabled="batchSubmitting"
-                />
+                <input v-model="selectedDeviceIds" type="checkbox" :value="device.id" :disabled="batchSubmitting" />
               </td>
               <td>{{ device.deviceCode }}</td>
               <td>{{ device.deviceName }}</td>
               <td>{{ device.location }}</td>
+              <td>{{ device.sensorCode || "未绑定" }}</td>
+              <td>{{ device.controlMode === "auto" ? "自动" : "手动" }}</td>
               <td>
-                <StatusBadge
-                  :status="device.status"
-                  :text="device.status === 'online' ? '在线' : '离线'"
-                />
+                <StatusBadge :status="device.status" :text="device.status === 'online' ? '在线' : '离线'" />
               </td>
               <td>
-                <StatusBadge
-                  :status="device.lampStatus === 'ON' ? 'success' : 'info'"
-                  :text="device.lampStatus"
-                />
+                <StatusBadge :status="device.lampStatus === 'ON' ? 'success' : 'info'" :text="device.lampStatus" />
               </td>
               <td>{{ device.lastHeartbeatAt }}</td>
               <td>
@@ -134,7 +105,7 @@
               </td>
             </tr>
             <tr v-if="!filteredDevices.length">
-              <td :colspan="canOperateDevices ? 8 : 7" class="table-empty">没有匹配的设备</td>
+              <td :colspan="canOperateDevices ? 10 : 9" class="table-empty">没有匹配的路灯</td>
             </tr>
           </tbody>
         </table>
@@ -175,21 +146,21 @@ const filterOptions = [
 ];
 
 const summaryStats = computed<DashboardStat[]>(() => [
-  { label: "设备总数", value: String(devices.value.length), helper: "当前列表中的设备数量" },
+  { label: "路灯总数", value: String(devices.value.length), helper: "当前列表中的路灯数量" },
   {
-    label: "在线设备",
-    value: String(devices.value.filter((device) => device.status === "online").length),
-    helper: "心跳正常设备",
+    label: "已绑定传感器",
+    value: String(devices.value.filter((device) => device.sensorId != null).length),
+    helper: "绑定后才可接收传感器数据",
   },
   {
-    label: "离线设备",
-    value: String(devices.value.filter((device) => device.status === "offline").length),
-    helper: "需重点排查",
+    label: "自动模式",
+    value: String(devices.value.filter((device) => device.controlMode === "auto").length),
+    helper: "按阈值自动控制",
   },
   {
     label: "当前开灯",
     value: String(devices.value.filter((device) => device.lampStatus === "ON").length),
-    helper: "方便答辩展示",
+    helper: "便于展示运行效果",
   },
 ]);
 
@@ -198,34 +169,25 @@ const filteredDevices = computed(() => {
   return devices.value.filter((device) => {
     const matchKeyword =
       !normalized ||
-      [device.deviceCode, device.deviceName, device.location]
+      [device.deviceCode, device.deviceName, device.location, device.sensorCode ?? ""]
         .join(" ")
         .toLowerCase()
         .includes(normalized);
 
-    const matchStatus =
-      statusFilter.value === "all" || device.status === statusFilter.value;
-
+    const matchStatus = statusFilter.value === "all" || device.status === statusFilter.value;
     return matchKeyword && matchStatus;
   });
 });
 
 const selectedCount = computed(() => selectedDeviceIds.value.length);
-
 const visibleDeviceIds = computed(() => filteredDevices.value.map((device) => device.id));
-
-const areAllVisibleSelected = computed(
-  () =>
-    Boolean(visibleDeviceIds.value.length) &&
-    visibleDeviceIds.value.every((id) => selectedDeviceIds.value.includes(id)),
-);
 
 const refreshStatusText = computed(() => {
   if (refreshing.value) {
     return "正在后台同步...";
   }
   if (!lastUpdatedAt.value) {
-    return "首次加载中";
+    return "首次加载中...";
   }
   return `最近更新：${lastUpdatedAt.value.toLocaleTimeString("zh-CN", {
     hour: "2-digit",
@@ -245,7 +207,7 @@ function getErrorMessage(error: unknown) {
       return parsed.detail;
     }
   } catch {
-    // Keep the original message when it is not a JSON payload.
+    // noop
   }
 
   return error.message;
@@ -257,8 +219,7 @@ function syncSelectedDeviceIds() {
 }
 
 function selectAllVisible() {
-  const merged = new Set([...selectedDeviceIds.value, ...visibleDeviceIds.value]);
-  selectedDeviceIds.value = [...merged];
+  selectedDeviceIds.value = [...new Set([...selectedDeviceIds.value, ...visibleDeviceIds.value])];
 }
 
 function clearSelection() {
@@ -266,17 +227,13 @@ function clearSelection() {
 }
 
 function applyBatchLampStatus(command: Extract<CommandType, "TURN_ON" | "TURN_OFF">, summary: BatchCommandSummary) {
-  const successIds = new Set(
-    summary.results.filter((item) => item.result === "success").map((item) => item.deviceId),
-  );
+  const successIds = new Set(summary.results.filter((item) => item.result === "success").map((item) => item.deviceId));
   if (!successIds.size) {
     return;
   }
 
   const nextStatus = command === "TURN_ON" ? "ON" : "OFF";
-  devices.value = devices.value.map((device) =>
-    successIds.has(device.id) ? { ...device, lampStatus: nextStatus } : device,
-  );
+  devices.value = devices.value.map((device) => (successIds.has(device.id) ? { ...device, lampStatus: nextStatus } : device));
 }
 
 async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TURN_OFF">) {
@@ -292,7 +249,7 @@ async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TUR
     applyBatchLampStatus(command, summary);
     selectedDeviceIds.value = [];
     batchMessageTone.value = summary.failedCount > 0 ? "error" : "success";
-    batchMessage.value = `已发送${command === "TURN_ON" ? "批量开灯" : "批量关灯"}指令，共 ${summary.total} 台，成功 ${summary.successCount} 台，失败 ${summary.failedCount} 台，跳过 ${summary.skippedCount} 台。`;
+    batchMessage.value = `已下发${command === "TURN_ON" ? "批量开灯" : "批量关灯"}指令，共 ${summary.total} 盏，成功 ${summary.successCount} 盏，失败 ${summary.failedCount} 盏，跳过 ${summary.skippedCount} 盏。`;
     void loadDevices({ silent: true });
   } catch (error) {
     batchMessageTone.value = "error";
@@ -303,8 +260,8 @@ async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TUR
 }
 
 async function loadDevices(options: { silent?: boolean } = {}) {
-  const shouldLoadSilently = Boolean(options.silent && devices.value.length);
-  if (shouldLoadSilently) {
+  const silent = Boolean(options.silent && devices.value.length);
+  if (silent) {
     refreshing.value = true;
   } else {
     loading.value = true;
@@ -316,7 +273,7 @@ async function loadDevices(options: { silent?: boolean } = {}) {
     syncSelectedDeviceIds();
     lastUpdatedAt.value = new Date();
   } catch (error) {
-    loadError.value = `设备列表加载失败：${getErrorMessage(error)}`;
+    loadError.value = `路灯列表加载失败：${getErrorMessage(error)}`;
     if (!devices.value.length) {
       devices.value = [];
     }
