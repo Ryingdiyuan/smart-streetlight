@@ -1,8 +1,8 @@
 import { http } from "@/lib/http";
 import type {
   SimulatorBrokerConfig,
-  SimulatorDevice,
   SimulatorLogEntry,
+  SimulatorSensor,
 } from "@/types/models";
 
 interface SimulatorBrokerConfigPayload {
@@ -15,10 +15,10 @@ interface SimulatorBrokerConfigPayload {
   connected: boolean;
 }
 
-interface SimulatorDevicePayload {
-  device_id: number;
-  device_code: string;
-  device_name: string;
+interface SimulatorSensorPayload {
+  sensor_id: number;
+  sensor_code: string;
+  sensor_name: string;
   location: string | null;
   running: boolean;
   online: boolean;
@@ -36,6 +36,10 @@ interface SimulatorDevicePayload {
   last_status_at?: string | null;
   last_command_at?: string | null;
   last_command?: string | null;
+  bound_device_id?: number | null;
+  bound_device_code?: string | null;
+  bound_device_name?: string | null;
+  control_mode?: "manual" | "auto" | null;
 }
 
 interface SimulatorLogPayload {
@@ -52,9 +56,9 @@ export interface SimulatorConfigInput {
   password: string;
 }
 
-export interface SimulatorDeviceInput {
-  deviceCode: string;
-  deviceName: string;
+export interface SimulatorSensorInput {
+  sensorCode: string;
+  sensorName: string;
   location: string;
   baseLight: number;
   variance: number;
@@ -65,8 +69,8 @@ export interface SimulatorDeviceInput {
   autoStart: boolean;
 }
 
-export interface SimulatorDeviceUpdateInput {
-  deviceName: string;
+export interface SimulatorSensorUpdateInput {
+  sensorName: string;
   location: string;
   baseLight: number;
   variance: number;
@@ -93,11 +97,11 @@ function mapConfig(payload: SimulatorBrokerConfigPayload): SimulatorBrokerConfig
   };
 }
 
-function mapDevice(payload: SimulatorDevicePayload): SimulatorDevice {
+function mapSensor(payload: SimulatorSensorPayload): SimulatorSensor {
   return {
-    deviceId: payload.device_id,
-    deviceCode: payload.device_code,
-    deviceName: payload.device_name,
+    sensorId: payload.sensor_id,
+    sensorCode: payload.sensor_code,
+    sensorName: payload.sensor_name,
     location: normalizeText(payload.location),
     running: payload.running,
     online: payload.online,
@@ -115,6 +119,10 @@ function mapDevice(payload: SimulatorDevicePayload): SimulatorDevice {
     lastStatusAt: normalizeText(payload.last_status_at),
     lastCommandAt: normalizeText(payload.last_command_at),
     lastCommand: normalizeText(payload.last_command),
+    boundDeviceId: payload.bound_device_id ?? undefined,
+    boundDeviceCode: payload.bound_device_code ?? undefined,
+    boundDeviceName: payload.bound_device_name ?? undefined,
+    controlMode: payload.control_mode ?? undefined,
   };
 }
 
@@ -131,24 +139,20 @@ export async function getSimulatorConfig(): Promise<SimulatorBrokerConfig> {
   return mapConfig(payload);
 }
 
-export async function updateSimulatorConfig(
-  config: SimulatorConfigInput,
-): Promise<SimulatorBrokerConfig> {
+export async function updateSimulatorConfig(config: SimulatorConfigInput): Promise<SimulatorBrokerConfig> {
   const payload = await http.put<SimulatorBrokerConfigPayload>("/simulator/config", config);
   return mapConfig(payload);
 }
 
-export async function getSimulatorDevices(): Promise<SimulatorDevice[]> {
-  const payload = await http.get<SimulatorDevicePayload[]>("/simulator/devices");
-  return payload.map(mapDevice);
+export async function getSimulatorSensors(): Promise<SimulatorSensor[]> {
+  const payload = await http.get<SimulatorSensorPayload[]>("/simulator/sensors");
+  return payload.map(mapSensor);
 }
 
-export async function createSimulatorDevice(
-  input: SimulatorDeviceInput,
-): Promise<SimulatorDevice> {
-  const payload = await http.post<SimulatorDevicePayload>("/simulator/devices", {
-    device_code: input.deviceCode,
-    device_name: input.deviceName,
+export async function registerSimulatorSensor(input: SimulatorSensorInput): Promise<SimulatorSensor> {
+  const payload = await http.post<SimulatorSensorPayload>("/simulator/sensors/register", {
+    sensor_code: input.sensorCode,
+    sensor_name: input.sensorName,
     location: input.location || null,
     status: "offline",
     base_light: input.baseLight,
@@ -159,29 +163,29 @@ export async function createSimulatorDevice(
     online: input.online,
     auto_start: input.autoStart,
   });
-  return mapDevice(payload);
+  return mapSensor(payload);
 }
 
-export async function startSimulatorDevice(deviceId: number): Promise<SimulatorDevice> {
-  const payload = await http.post<SimulatorDevicePayload>(`/simulator/devices/${deviceId}/start`);
-  return mapDevice(payload);
+export async function startSimulatorSensor(sensorId: number): Promise<SimulatorSensor> {
+  const payload = await http.post<SimulatorSensorPayload>(`/simulator/sensors/${sensorId}/start`);
+  return mapSensor(payload);
 }
 
-export async function stopSimulatorDevice(deviceId: number): Promise<SimulatorDevice> {
-  const payload = await http.post<SimulatorDevicePayload>(`/simulator/devices/${deviceId}/stop`);
-  return mapDevice(payload);
+export async function stopSimulatorSensor(sensorId: number): Promise<SimulatorSensor> {
+  const payload = await http.post<SimulatorSensorPayload>(`/simulator/sensors/${sensorId}/stop`);
+  return mapSensor(payload);
 }
 
-export async function deleteSimulatorDevice(deviceId: number): Promise<void> {
-  await http.delete(`/simulator/devices/${deviceId}`);
+export async function deleteSimulatorSensor(sensorId: number): Promise<void> {
+  await http.delete(`/simulator/sensors/${sensorId}`);
 }
 
-export async function updateSimulatorDevice(
-  deviceId: number,
-  input: SimulatorDeviceUpdateInput,
-): Promise<SimulatorDevice> {
-  const payload = await http.put<SimulatorDevicePayload>(`/simulator/devices/${deviceId}`, {
-    device_name: input.deviceName,
+export async function updateSimulatorSensor(
+  sensorId: number,
+  input: SimulatorSensorUpdateInput,
+): Promise<SimulatorSensor> {
+  const payload = await http.put<SimulatorSensorPayload>(`/simulator/sensors/${sensorId}`, {
+    sensor_name: input.sensorName,
     location: input.location || null,
     base_light: input.baseLight,
     variance: input.variance,
@@ -191,13 +195,10 @@ export async function updateSimulatorDevice(
     online: input.online,
     running: input.running,
   });
-  return mapDevice(payload);
+  return mapSensor(payload);
 }
 
-export async function getSimulatorLogs(
-  limit = 120,
-  level?: string,
-): Promise<SimulatorLogEntry[]> {
+export async function getSimulatorLogs(limit = 120, level?: string): Promise<SimulatorLogEntry[]> {
   const query = new URLSearchParams({
     limit: String(limit),
     ...(level ? { level } : {}),

@@ -9,7 +9,9 @@ import type {
   DeviceStatus,
   LampStatus,
   LightHistoryPoint,
+  SensorSummary,
   ThresholdConfig,
+  ControlMode,
 } from "@/types/models";
 
 export interface DeviceApiPayload {
@@ -21,6 +23,22 @@ export interface DeviceApiPayload {
   longitude?: number | null;
   status: string;
   last_heartbeat_at?: string | null;
+  sensor_id?: number | null;
+  sensor_code?: string | null;
+  sensor_name?: string | null;
+  lamp_status?: string | null;
+  control_mode?: string | null;
+}
+
+export interface SensorApiPayload {
+  id: number;
+  sensor_code: string;
+  sensor_name: string;
+  location: string | null;
+  status: string;
+  bound_device_id?: number | null;
+  bound_device_code?: string | null;
+  bound_device_name?: string | null;
 }
 
 export interface LightDataApiPayload {
@@ -112,6 +130,10 @@ export function mapLampStatus(status?: string | null): LampStatus {
   return String(status ?? "").toUpperCase() === "ON" ? "ON" : "OFF";
 }
 
+export function mapControlMode(mode?: string | null): ControlMode {
+  return String(mode ?? "").toLowerCase() === "auto" ? "auto" : "manual";
+}
+
 export function mapAlarmLevel(level: string): AlarmLevel {
   const normalized = level.toUpperCase();
   if (normalized === "CRITICAL") {
@@ -161,8 +183,25 @@ export function mapDevicePayload(payload: DeviceApiPayload): Device {
     latitude: payload.latitude ?? undefined,
     longitude: payload.longitude ?? undefined,
     status: mapDeviceStatus(payload.status),
-    lampStatus: "OFF",
+    lampStatus: mapLampStatus(payload.lamp_status),
     lastHeartbeatAt: formatDateTime(payload.last_heartbeat_at),
+    controlMode: mapControlMode(payload.control_mode),
+    sensorId: payload.sensor_id ?? undefined,
+    sensorCode: payload.sensor_code ?? undefined,
+    sensorName: payload.sensor_name ?? undefined,
+  };
+}
+
+export function mapSensorPayload(payload: SensorApiPayload): SensorSummary {
+  return {
+    id: payload.id,
+    sensorCode: payload.sensor_code,
+    sensorName: payload.sensor_name,
+    location: payload.location ?? "-",
+    status: mapDeviceStatus(payload.status),
+    boundDeviceId: payload.bound_device_id ?? undefined,
+    boundDeviceCode: payload.bound_device_code ?? undefined,
+    boundDeviceName: payload.bound_device_name ?? undefined,
   };
 }
 
