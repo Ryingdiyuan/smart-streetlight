@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     mqtt_client_id: str = "smart-streetlight-backend"
 
     scheduler_enabled: bool = True
-    device_offline_seconds: int = 180
+    device_offline_seconds: int = 30
 
     llm_enabled: bool = False
     llm_provider: str = "openai-compatible"

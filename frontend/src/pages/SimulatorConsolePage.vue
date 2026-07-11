@@ -309,7 +309,7 @@ const editForm = reactive({
   baseLight: 120,
   variance: 35,
   voltageBase: 220.5,
-  telemetryIntervalSeconds: 5,
+  telemetryIntervalSeconds: 20,
   statusEvery: 1,
   online: true,
   running: true,

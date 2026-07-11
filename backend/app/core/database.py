@@ -43,6 +43,8 @@ def ensure_schema_updates() -> None:
             alter_statements.append("ADD COLUMN lamp_status VARCHAR(20) NOT NULL DEFAULT 'OFF'")
         if "control_mode" not in device_columns:
             alter_statements.append("ADD COLUMN control_mode VARCHAR(20) NOT NULL DEFAULT 'manual'")
+        if "sensor_control_enabled" not in device_columns:
+            alter_statements.append("ADD COLUMN sensor_control_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 
         if alter_statements:
             with engine.begin() as connection:
@@ -68,7 +70,7 @@ def ensure_schema_updates() -> None:
         if "voltage_base" not in sensor_columns:
             alter_statements.append("ADD COLUMN voltage_base FLOAT NOT NULL DEFAULT 220.5")
         if "telemetry_interval_seconds" not in sensor_columns:
-            alter_statements.append("ADD COLUMN telemetry_interval_seconds INT NOT NULL DEFAULT 5")
+            alter_statements.append("ADD COLUMN telemetry_interval_seconds INT NOT NULL DEFAULT 20")
         if "status_every" not in sensor_columns:
             alter_statements.append("ADD COLUMN status_every INT NOT NULL DEFAULT 1")
 
@@ -80,6 +82,24 @@ def ensure_schema_updates() -> None:
                 connection.execute(
                     text("ALTER TABLE sensors MODIFY COLUMN sensor_type VARCHAR(50) NOT NULL DEFAULT 'light'")
                 )
+
+            # 将历史默认的 5 秒采样间隔平滑迁移为新的 20 秒默认值。
+            if "telemetry_interval_seconds" in sensor_columns:
+                connection.execute(text("UPDATE sensors SET telemetry_interval_seconds = 20 WHERE telemetry_interval_seconds = 5"))
+
+    if inspector.has_table("alarm_logs"):
+        alarm_columns = {column["name"] for column in inspector.get_columns("alarm_logs")}
+        alter_statements: list[str] = []
+
+        if "sensor_id" not in alarm_columns:
+            alter_statements.append("ADD COLUMN sensor_id INT NULL")
+
+        with engine.begin() as connection:
+            for statement in alter_statements:
+                connection.execute(text(f"ALTER TABLE alarm_logs {statement}"))
+
+            if "device_id" in alarm_columns:
+                connection.execute(text("ALTER TABLE alarm_logs MODIFY COLUMN device_id INT NULL"))
 
 
 def get_db() -> Generator[Session, None, None]:

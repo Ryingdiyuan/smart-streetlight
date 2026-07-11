@@ -17,7 +17,7 @@ class SensorCreate(SensorBase):
     base_light: int = 120
     variance: int = 35
     voltage_base: float = 220.5
-    telemetry_interval_seconds: int = 5
+    telemetry_interval_seconds: int = 20
     status_every: int = 1
 
 

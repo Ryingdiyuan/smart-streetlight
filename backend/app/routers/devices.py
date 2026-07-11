@@ -88,6 +88,7 @@ def serialize_device(db: Session, device: Device) -> dict:
         "sensor_name": sensor.sensor_name if sensor else None,
         "lamp_status": device.lamp_status,
         "control_mode": device.control_mode,
+        "sensor_control_enabled": device.sensor_control_enabled,
         "last_heartbeat_at": device.last_heartbeat_at,
     }
 

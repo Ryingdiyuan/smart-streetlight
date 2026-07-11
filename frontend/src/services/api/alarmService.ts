@@ -12,7 +12,7 @@ export async function getAlarmList(): Promise<AlarmRecord[]> {
 
   const deviceCodeById = new Map(devices.map((device) => [device.id, device.deviceCode]));
 
-  return alarms.map((alarm) => mapAlarmPayload(alarm, deviceCodeById.get(alarm.device_id)));
+  return alarms.map((alarm) => mapAlarmPayload(alarm, alarm.device_id != null ? deviceCodeById.get(alarm.device_id) : undefined));
 }
 
 export async function handleAlarm(alarmId: string): Promise<AlarmRecord> {
@@ -22,5 +22,5 @@ export async function handleAlarm(alarmId: string): Promise<AlarmRecord> {
   ]);
 
   const deviceCodeById = new Map(devices.map((device) => [device.id, device.deviceCode]));
-  return mapAlarmPayload(alarm, deviceCodeById.get(alarm.device_id));
+  return mapAlarmPayload(alarm, alarm.device_id != null ? deviceCodeById.get(alarm.device_id) : undefined);
 }

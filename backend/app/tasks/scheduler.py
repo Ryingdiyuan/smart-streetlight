@@ -16,7 +16,7 @@ def check_device_offline() -> None:
 scheduler.add_job(
     check_device_offline,
     "interval",
-    seconds=60,
+    seconds=10,
     id="check_device_offline",
     replace_existing=True,
 )

@@ -7,23 +7,24 @@
             <th>类型</th>
             <th>级别</th>
             <th>内容</th>
-            <th>时间</th>
+            <th>处理进度</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="alarm in alarms" :key="alarm.id">
-            <td>{{ alarm.alarmType }}</td>
+            <td>{{ alarmTypeText(alarm) }}</td>
             <td>
               <StatusBadge :status="getAlarmBadgeStatus(alarm.alarmLevel)" :text="alarm.alarmLevel" />
             </td>
             <td>{{ alarm.alarmContent }}</td>
             <td>
               <div class="table-cell-stack">
-                <span>{{ alarm.createdAt }}</span>
+                <span>告警时间：{{ alarm.createdAt }}</span>
                 <StatusBadge
                   :status="alarm.handled ? 'info' : 'warning'"
                   :text="alarm.handled ? '已处理' : '待处理'"
                 />
+                <span v-if="alarm.handled && alarm.handledAt" class="inline-note">处理时间：{{ alarm.handledAt }}</span>
               </div>
             </td>
           </tr>
@@ -53,5 +54,18 @@ function getAlarmBadgeStatus(level: AlarmLevel) {
     default:
       return "info";
   }
+}
+
+function alarmTypeText(alarm: AlarmRecord) {
+  if (alarm.alarmType === "SENSOR_OFFLINE") {
+    return "传感器离线";
+  }
+  if (alarm.alarmType === "DEVICE_OFFLINE") {
+    return "设备离线";
+  }
+  if (alarm.alarmType === "COMMAND_FAILED") {
+    return "命令失败";
+  }
+  return "光照异常";
 }
 </script>

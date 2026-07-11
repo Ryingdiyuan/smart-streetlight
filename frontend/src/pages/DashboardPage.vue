@@ -451,6 +451,7 @@ function lampStatusText(status: LampStatus) {
 function alarmTypeText(type: AlarmType) {
   const labels: Record<AlarmType, string> = {
     DEVICE_OFFLINE: "设备离线",
+    SENSOR_OFFLINE: "传感器离线",
     LIGHT_ABNORMAL: "光照异常",
     COMMAND_FAILED: "指令失败",
   };

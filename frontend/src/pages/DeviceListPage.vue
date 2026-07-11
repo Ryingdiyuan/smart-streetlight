@@ -58,6 +58,12 @@
             <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchCommand('TURN_OFF')">
               {{ batchSubmitting ? "执行中..." : "批量关灯" }}
             </button>
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchSensorControl(true)">
+              {{ batchSubmitting ? "执行中..." : "批量启用传感器控制" }}
+            </button>
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchSensorControl(false)">
+              {{ batchSubmitting ? "执行中..." : "批量暂停传感器控制" }}
+            </button>
           </div>
         </div>
         <div
@@ -120,7 +126,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
-import { getDeviceList, sendBatchDeviceCommand } from "@/services/deviceService";
+import { getDeviceList, sendBatchDeviceCommand, updateDevice } from "@/services/deviceService";
 import { can } from "@/services/permissions";
 import type { BatchCommandSummary, CommandType, DashboardStat, Device } from "@/types/models";
 
@@ -236,6 +242,17 @@ function applyBatchLampStatus(command: Extract<CommandType, "TURN_ON" | "TURN_OF
   devices.value = devices.value.map((device) => (successIds.has(device.id) ? { ...device, lampStatus: nextStatus } : device));
 }
 
+function applyBatchSensorControl(enabled: boolean, successIds: number[]) {
+  if (!successIds.length) {
+    return;
+  }
+
+  const successIdSet = new Set(successIds);
+  devices.value = devices.value.map((device) =>
+    successIdSet.has(device.id) ? { ...device, sensorControlEnabled: enabled } : device,
+  );
+}
+
 async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TURN_OFF">) {
   if (!selectedCount.value || batchSubmitting.value || !canOperateDevices.value) {
     return;
@@ -254,6 +271,44 @@ async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TUR
   } catch (error) {
     batchMessageTone.value = "error";
     batchMessage.value = `批量操作失败：${getErrorMessage(error)}`;
+  } finally {
+    batchSubmitting.value = false;
+  }
+}
+
+async function handleBatchSensorControl(enabled: boolean) {
+  if (!selectedCount.value || batchSubmitting.value || !canOperateDevices.value) {
+    return;
+  }
+
+  batchSubmitting.value = true;
+  batchMessage.value = "";
+
+  try {
+    const selectedDevices = devices.value.filter((device) => selectedDeviceIds.value.includes(device.id));
+    const results = await Promise.allSettled(
+      selectedDevices.map(async (device) => {
+        await updateDevice(device.id, { sensor_control_enabled: enabled });
+        return device;
+      }),
+    );
+
+    const successDevices = results
+      .filter((result): result is PromiseFulfilledResult<Device> => result.status === "fulfilled")
+      .map((result) => result.value);
+    const failedDeviceCodes = results
+      .map((result, index) => ({ result, device: selectedDevices[index] }))
+      .filter((item) => item.result.status === "rejected")
+      .map((item) => item.device.deviceCode);
+
+    applyBatchSensorControl(enabled, successDevices.map((device) => device.id));
+    selectedDeviceIds.value = [];
+    batchMessageTone.value = failedDeviceCodes.length > 0 ? "error" : "success";
+    batchMessage.value = `${enabled ? "已批量启用" : "已批量暂停"}传感器控制，共 ${selectedDevices.length} 盏，成功 ${successDevices.length} 盏，失败 ${failedDeviceCodes.length} 盏${failedDeviceCodes.length ? `，失败设备：${failedDeviceCodes.join("、")}` : ""}。`;
+    void loadDevices({ silent: true });
+  } catch (error) {
+    batchMessageTone.value = "error";
+    batchMessage.value = `批量传感器控制失败：${getErrorMessage(error)}`;
   } finally {
     batchSubmitting.value = false;
   }

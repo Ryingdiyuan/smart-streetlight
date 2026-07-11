@@ -4,7 +4,7 @@ import random
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -18,7 +18,7 @@ DEFAULT_SENSOR_PROFILE = {
     "base_light": 120,
     "variance": 35,
     "voltage_base": 220.5,
-    "telemetry_interval_seconds": 5,
+    "telemetry_interval_seconds": 20,
     "status_every": 1,
 }
 
@@ -52,6 +52,71 @@ class SimulatorLogEntry:
 
 
 @dataclass
+class HeartbeatPublisher:
+    online: bool = True
+    status_every: int = 1
+    last_status_at: datetime | None = None
+    next_status_monotonic: float = 0.0
+
+    def apply_defaults(self) -> None:
+        self.status_every = max(1, int(self.status_every or DEFAULT_SENSOR_PROFILE["status_every"]))
+
+    def reset_cycle(self) -> None:
+        self.next_status_monotonic = 0.0
+
+    def should_publish(self, now_monotonic: float) -> bool:
+        return not self.next_status_monotonic or now_monotonic >= self.next_status_monotonic
+
+    def schedule_next(self, now_monotonic: float) -> None:
+        self.next_status_monotonic = now_monotonic + self.status_every
+
+    def build_payload(self, sensor_code: str, lamp_status: str) -> dict[str, Any]:
+        return {
+            "sensorId": sensor_code,
+            "online": self.online,
+            "lampStatus": lamp_status,
+            "timestamp": now_text(),
+        }
+
+    def mark_published(self, published_at: datetime) -> None:
+        self.last_status_at = published_at
+
+
+@dataclass
+class TelemetryPublisher:
+    base_light: int = 120
+    variance: int = 35
+    voltage_base: float = 220.5
+    interval_seconds: int = 20
+    publish_count: int = 0
+    current_light_intensity: int = 0
+    last_telemetry_at: datetime | None = None
+
+    def apply_defaults(self) -> None:
+        self.base_light = self.base_light or int(DEFAULT_SENSOR_PROFILE["base_light"])
+        self.variance = self.variance or int(DEFAULT_SENSOR_PROFILE["variance"])
+        self.voltage_base = self.voltage_base or float(DEFAULT_SENSOR_PROFILE["voltage_base"])
+        self.interval_seconds = max(1, int(self.interval_seconds or DEFAULT_SENSOR_PROFILE["telemetry_interval_seconds"]))
+
+    def build_payload(self, sensor_code: str, lamp_status: str, brightness: int) -> dict[str, Any]:
+        ambient = self.base_light + random.randint(-self.variance, self.variance)
+        lamp_boost = max(30, int(brightness * 1.6)) if lamp_status == "on" else 0
+        self.current_light_intensity = clamp(ambient + lamp_boost, 0, 1000)
+        voltage = round(self.voltage_base + random.uniform(-1.2, 1.2), 1)
+        return {
+            "sensorId": sensor_code,
+            "lightIntensity": self.current_light_intensity,
+            "lampStatus": lamp_status,
+            "voltage": voltage,
+            "timestamp": now_text(),
+        }
+
+    def mark_published(self, published_at: datetime) -> None:
+        self.publish_count += 1
+        self.last_telemetry_at = published_at
+
+
+@dataclass
 class SimulatorSensorState:
     sensor_id: int
     sensor_code: str
@@ -60,16 +125,8 @@ class SimulatorSensorState:
     running: bool = False
     lamp_status: str = "off"
     brightness: int = 0
-    online: bool = True
-    base_light: int = 120
-    variance: int = 35
-    voltage_base: float = 220.5
-    telemetry_interval_seconds: int = 5
-    status_every: int = 1
-    publish_count: int = 0
-    current_light_intensity: int = 0
-    last_telemetry_at: datetime | None = None
-    last_status_at: datetime | None = None
+    heartbeat: HeartbeatPublisher = field(default_factory=HeartbeatPublisher)
+    telemetry: TelemetryPublisher = field(default_factory=TelemetryPublisher)
     last_command_at: datetime | None = None
     last_command: str | None = None
     system_status: str = "offline"
@@ -79,33 +136,83 @@ class SimulatorSensorState:
     control_mode: str | None = None
     next_publish_monotonic: float = 0.0
 
+    @property
+    def online(self) -> bool:
+        return self.heartbeat.online
+
+    @online.setter
+    def online(self, value: bool) -> None:
+        self.heartbeat.online = value
+
+    @property
+    def base_light(self) -> int:
+        return self.telemetry.base_light
+
+    @base_light.setter
+    def base_light(self, value: int) -> None:
+        self.telemetry.base_light = value
+
+    @property
+    def variance(self) -> int:
+        return self.telemetry.variance
+
+    @variance.setter
+    def variance(self, value: int) -> None:
+        self.telemetry.variance = value
+
+    @property
+    def voltage_base(self) -> float:
+        return self.telemetry.voltage_base
+
+    @voltage_base.setter
+    def voltage_base(self, value: float) -> None:
+        self.telemetry.voltage_base = value
+
+    @property
+    def telemetry_interval_seconds(self) -> int:
+        return self.telemetry.interval_seconds
+
+    @telemetry_interval_seconds.setter
+    def telemetry_interval_seconds(self, value: int) -> None:
+        self.telemetry.interval_seconds = value
+
+    @property
+    def status_every(self) -> int:
+        return self.heartbeat.status_every
+
+    @status_every.setter
+    def status_every(self, value: int) -> None:
+        self.heartbeat.status_every = value
+
+    @property
+    def publish_count(self) -> int:
+        return self.telemetry.publish_count
+
+    @property
+    def current_light_intensity(self) -> int:
+        return self.telemetry.current_light_intensity
+
+    @property
+    def last_telemetry_at(self) -> datetime | None:
+        return self.telemetry.last_telemetry_at
+
+    @property
+    def last_status_at(self) -> datetime | None:
+        return self.heartbeat.last_status_at
+
     def apply_defaults(self) -> None:
-        self.base_light = self.base_light or int(DEFAULT_SENSOR_PROFILE["base_light"])
-        self.variance = self.variance or int(DEFAULT_SENSOR_PROFILE["variance"])
-        self.voltage_base = self.voltage_base or float(DEFAULT_SENSOR_PROFILE["voltage_base"])
-        self.telemetry_interval_seconds = max(1, int(self.telemetry_interval_seconds or 5))
-        self.status_every = max(1, int(self.status_every or 1))
+        self.telemetry.apply_defaults()
+        self.heartbeat.apply_defaults()
+
+    def reset_runtime_cycle(self) -> None:
+        self.next_publish_monotonic = 0
+        self.heartbeat.reset_cycle()
 
     def build_status_payload(self) -> dict[str, Any]:
-        return {
-            "sensorId": self.sensor_code,
-            "online": self.online,
-            "lampStatus": self.lamp_status,
-            "timestamp": now_text(),
-        }
+        return self.heartbeat.build_payload(self.sensor_code, self.lamp_status)
 
     def build_telemetry_payload(self) -> dict[str, Any]:
-        ambient = self.base_light + random.randint(-self.variance, self.variance)
-        lamp_boost = max(30, int(self.brightness * 1.6)) if self.lamp_status == "on" else 0
-        self.current_light_intensity = clamp(ambient + lamp_boost, 0, 1000)
-        voltage = round(self.voltage_base + random.uniform(-1.2, 1.2), 1)
-        return {
-            "sensorId": self.sensor_code,
-            "lightIntensity": self.current_light_intensity,
-            "lampStatus": self.lamp_status,
-            "voltage": voltage,
-            "timestamp": now_text(),
-        }
+        return self.telemetry.build_payload(self.sensor_code, self.lamp_status, self.brightness)
 
     def apply_command(self, payload: dict[str, Any]) -> None:
         command = str(payload.get("command", "")).upper()
@@ -314,7 +421,7 @@ class SimulatorManager:
 
             if running is not None:
                 state.running = running
-                state.next_publish_monotonic = 0
+                state.reset_runtime_cycle()
             if base_light is not None:
                 state.base_light = base_light
             if variance is not None:
@@ -337,7 +444,7 @@ class SimulatorManager:
             if state is None:
                 return None
             state.running = running
-            state.next_publish_monotonic = 0
+            state.reset_runtime_cycle()
             self._logs.appendleft(
                 SimulatorLogEntry(
                     created_at=datetime.now(),
@@ -428,44 +535,31 @@ class SimulatorManager:
             for state in states:
                 if not state.running:
                     continue
-                if state.next_publish_monotonic and state.next_publish_monotonic > now_monotonic:
-                    continue
-
-                if not state.online:
-                    status_payload = state.build_status_payload()
-                    status_ok = self._publish(f"streetlight/{state.sensor_code}/status", status_payload)
-                    state.last_status_at = datetime.now()
-                    if status_ok:
-                        self.append_log(
-                            "INFO",
-                            f"传感器 {state.sensor_code} 已发送离线 status online={state.online}",
+                if not state.next_publish_monotonic or now_monotonic >= state.next_publish_monotonic:
+                    if state.online:
+                        telemetry_payload = state.build_telemetry_payload()
+                        telemetry_ok = self._publish(
+                            f"streetlight/{state.sensor_code}/telemetry",
+                            telemetry_payload,
                         )
-                    else:
-                        self.append_log("WARN", f"传感器 {state.sensor_code} 离线 status 发送失败")
+                        published_at = datetime.now()
+                        state.telemetry.mark_published(published_at)
+                        if telemetry_ok:
+                            self.append_log(
+                                "INFO",
+                                f"传感器 {state.sensor_code} 已发送 telemetry light={state.current_light_intensity}",
+                            )
+                        else:
+                            self.append_log("WARN", f"传感器 {state.sensor_code} telemetry 发送失败")
 
                     state.next_publish_monotonic = now_monotonic + state.telemetry_interval_seconds
-                    continue
 
-                telemetry_payload = state.build_telemetry_payload()
-                telemetry_ok = self._publish(
-                    f"streetlight/{state.sensor_code}/telemetry",
-                    telemetry_payload,
-                )
-                state.last_telemetry_at = datetime.now()
-                state.publish_count += 1
-
-                if telemetry_ok:
-                    self.append_log(
-                        "INFO",
-                        f"传感器 {state.sensor_code} 已发送 telemetry light={state.current_light_intensity}",
-                    )
-                else:
-                    self.append_log("WARN", f"传感器 {state.sensor_code} telemetry 发送失败")
-
-                if state.publish_count % state.status_every == 0:
+                if state.heartbeat.should_publish(now_monotonic):
                     status_payload = state.build_status_payload()
                     status_ok = self._publish(f"streetlight/{state.sensor_code}/status", status_payload)
-                    state.last_status_at = datetime.now()
+                    published_at = datetime.now()
+                    state.heartbeat.mark_published(published_at)
+                    state.heartbeat.schedule_next(now_monotonic)
                     if status_ok:
                         self.append_log(
                             "INFO",
@@ -473,8 +567,6 @@ class SimulatorManager:
                         )
                     else:
                         self.append_log("WARN", f"传感器 {state.sensor_code} status 发送失败")
-
-                state.next_publish_monotonic = now_monotonic + state.telemetry_interval_seconds
 
             self._stop_event.wait(0.5)
 

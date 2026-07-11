@@ -24,7 +24,7 @@ class SimulatorSensorCreate(BaseModel):
     base_light: int = 120
     variance: int = 35
     voltage_base: float = 220.5
-    telemetry_interval_seconds: int = 5
+    telemetry_interval_seconds: int = 20
     status_every: int = 1
     online: bool = True
     auto_start: bool = True
@@ -70,6 +70,26 @@ class SimulatorSensorRead(BaseModel):
     bound_device_code: str | None = None
     bound_device_name: str | None = None
     control_mode: str | None = None
+
+
+class SimulatorSensorBatchRunningUpdate(BaseModel):
+    sensor_ids: list[int]
+    running: bool
+
+
+class SimulatorSensorBatchRunningItemRead(BaseModel):
+    sensor_id: int
+    sensor_code: str
+    result: str
+    running: bool
+
+
+class SimulatorSensorBatchRunningRead(BaseModel):
+    action: str
+    total: int
+    success_count: int
+    failed_count: int
+    results: list[SimulatorSensorBatchRunningItemRead]
 
 
 class SimulatorLogRead(BaseModel):

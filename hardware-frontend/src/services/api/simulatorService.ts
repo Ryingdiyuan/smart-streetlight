@@ -1,5 +1,6 @@
 import { http } from "@/lib/http";
 import type {
+  SimulatorBatchControlSummary,
   SimulatorBrokerConfig,
   SimulatorLogEntry,
   SimulatorSensor,
@@ -46,6 +47,21 @@ interface SimulatorLogPayload {
   created_at: string;
   level: string;
   message: string;
+}
+
+interface SimulatorBatchControlItemPayload {
+  sensor_id: number;
+  sensor_code: string;
+  result: "success" | "failed";
+  running: boolean;
+}
+
+interface SimulatorBatchControlPayload {
+  action: "start" | "stop";
+  total: number;
+  success_count: number;
+  failed_count: number;
+  results: SimulatorBatchControlItemPayload[];
 }
 
 export interface SimulatorConfigInput {
@@ -134,6 +150,21 @@ function mapLog(payload: SimulatorLogPayload): SimulatorLogEntry {
   };
 }
 
+function mapBatchControlSummary(payload: SimulatorBatchControlPayload): SimulatorBatchControlSummary {
+  return {
+    action: payload.action,
+    total: payload.total,
+    successCount: payload.success_count,
+    failedCount: payload.failed_count,
+    results: payload.results.map((item) => ({
+      sensorId: item.sensor_id,
+      sensorCode: item.sensor_code,
+      result: item.result,
+      running: item.running,
+    })),
+  };
+}
+
 export async function getSimulatorConfig(): Promise<SimulatorBrokerConfig> {
   const payload = await http.get<SimulatorBrokerConfigPayload>("/simulator/config");
   return mapConfig(payload);
@@ -196,6 +227,17 @@ export async function updateSimulatorSensor(
     running: input.running,
   });
   return mapSensor(payload);
+}
+
+export async function updateSimulatorSensorsRunning(
+  sensorIds: number[],
+  running: boolean,
+): Promise<SimulatorBatchControlSummary> {
+  const payload = await http.put<SimulatorBatchControlPayload>("/simulator/sensors/running/batch", {
+    sensor_ids: sensorIds,
+    running,
+  });
+  return mapBatchControlSummary(payload);
 }
 
 export async function getSimulatorLogs(limit = 120, level?: string): Promise<SimulatorLogEntry[]> {

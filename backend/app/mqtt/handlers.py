@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from typing import Any, Callable
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
@@ -106,8 +107,6 @@ def handle_telemetry_payload(payload: dict[str, Any], db: Session) -> None:
         logger.warning("Telemetry payload missing lightIntensity: %s", payload)
         return
 
-    sensor.status = "online"
-    sensor.last_heartbeat_at = parse_reported_at(payload.get("timestamp"))
     bound_device = get_bound_device(db, sensor.id)
     if bound_device is None:
         db.commit()
@@ -126,20 +125,20 @@ def handle_telemetry_payload(payload: dict[str, Any], db: Session) -> None:
     )
     db.add(light_data)
 
-    bound_device.status = "online"
-    bound_device.last_heartbeat_at = sensor.last_heartbeat_at
-    bound_device.lamp_status = lamp_status
+    sensor_control_enabled = getattr(bound_device, "sensor_control_enabled", True)
+    if sensor_control_enabled:
+        bound_device.lamp_status = lamp_status
 
-    suggested_action = evaluate_auto_control(db, bound_device.id, light_data.light_intensity)
-    if bound_device.control_mode == "auto" and suggested_action in {ACTION_TURN_ON, ACTION_TURN_OFF}:
-        desired_lamp_status = "ON" if suggested_action == ACTION_TURN_ON else "OFF"
-        if bound_device.lamp_status != desired_lamp_status:
-            apply_lamp_command(
-                db,
-                bound_device,
-                command=suggested_action,
-                source="auto",
-            )
+        suggested_action = evaluate_auto_control(db, bound_device.id, light_data.light_intensity)
+        if bound_device.control_mode == "auto" and suggested_action in {ACTION_TURN_ON, ACTION_TURN_OFF}:
+            desired_lamp_status = "ON" if suggested_action == ACTION_TURN_ON else "OFF"
+            if bound_device.lamp_status != desired_lamp_status:
+                apply_lamp_command(
+                    db,
+                    bound_device,
+                    command=suggested_action,
+                    source="auto",
+                )
 
     db.commit()
     db.refresh(light_data)
@@ -165,14 +164,17 @@ def handle_status_payload(payload: dict[str, Any], db: Session) -> None:
     if bound_device is not None:
         bound_device.status = sensor.status
         bound_device.last_heartbeat_at = sensor.last_heartbeat_at
-        if payload.get("lampStatus"):
+        if getattr(bound_device, "sensor_control_enabled", True) and payload.get("lampStatus"):
             bound_device.lamp_status = str(payload["lampStatus"]).upper()
 
         if is_online:
             (
                 db.query(AlarmLog)
                 .filter(
-                    AlarmLog.device_id == bound_device.id,
+                    or_(
+                        AlarmLog.sensor_id == sensor.id,
+                        AlarmLog.device_id == bound_device.id,
+                    ),
                     AlarmLog.alarm_type == "offline",
                     AlarmLog.handled.is_(False),
                 )
@@ -184,6 +186,22 @@ def handle_status_payload(payload: dict[str, Any], db: Session) -> None:
                     synchronize_session=False,
                 )
             )
+    elif is_online:
+        (
+            db.query(AlarmLog)
+            .filter(
+                AlarmLog.sensor_id == sensor.id,
+                AlarmLog.alarm_type == "offline",
+                AlarmLog.handled.is_(False),
+            )
+            .update(
+                {
+                    AlarmLog.handled: True,
+                    AlarmLog.handled_at: datetime.utcnow(),
+                },
+                synchronize_session=False,
+            )
+        )
 
     db.commit()
     logger.info("Updated status from sensor %s to %s", sensor.sensor_code, sensor.status)

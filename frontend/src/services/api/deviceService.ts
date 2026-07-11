@@ -20,7 +20,6 @@ import {
   mapBatchCommandSummaryPayload,
   mapCommandLogPayload,
   mapDevicePayload,
-  mapLampStatus,
   mapLightHistoryPoint,
   mapThresholdPayload,
 } from "@/services/api/normalizers";
@@ -73,7 +72,6 @@ export async function getDeviceList(): Promise<Device[]> {
 
     return {
       ...mappedDevice,
-      lampStatus: mapLampStatus(latestLightResult.value.lamp_status),
       lastHeartbeatAt:
         mappedDevice.lastHeartbeatAt === "--"
           ? latestLightResult.value.reported_at.replace("T", " ").slice(0, 19)
@@ -84,8 +82,8 @@ export async function getDeviceList(): Promise<Device[]> {
 
 export async function getDeviceDetail(id: number): Promise<DeviceDetail | null> {
   try {
-    const [devicePayload, latestLight, history, threshold, commandLogs, alarms] = await Promise.all([
-      http.get<DeviceApiPayload>(`/devices/${id}`),
+    const devicePayload = await http.get<DeviceApiPayload>(`/devices/${id}`);
+    const [latestLightResult, historyResult, thresholdResult, commandLogsResult, alarmsResult] = await Promise.allSettled([
       getLatestLight(id),
       getLightHistory(id),
       http.get<ThresholdConfigApiPayload>(`/devices/${id}/threshold`),
@@ -94,12 +92,24 @@ export async function getDeviceDetail(id: number): Promise<DeviceDetail | null> 
     ]);
 
     const device = mapDevicePayload(devicePayload);
+    const latestLight = latestLightResult.status === "fulfilled" ? latestLightResult.value : null;
+    const history = historyResult.status === "fulfilled" ? historyResult.value : [];
+    const threshold =
+      thresholdResult.status === "fulfilled"
+        ? mapThresholdPayload(thresholdResult.value, device.deviceCode)
+        : {
+            deviceId: device.deviceCode,
+            lowThreshold: 100,
+            highThreshold: 300,
+            enabled: true,
+          };
+    const commandLogs = commandLogsResult.status === "fulfilled" ? commandLogsResult.value : [];
+    const alarms = alarmsResult.status === "fulfilled" ? alarmsResult.value : [];
 
     return {
       ...device,
-      lampStatus: latestLight ? mapLampStatus(latestLight.lamp_status) : device.lampStatus,
       currentLightIntensity: latestLight?.light_intensity ?? 0,
-      threshold: mapThresholdPayload(threshold, device.deviceCode),
+      threshold,
       history: history
         .slice()
         .reverse()
@@ -160,8 +170,9 @@ export interface CreateDevicePayload {
   location?: string;
   latitude?: number;
   longitude?: number;
-  sensor_id?: number;
+  sensor_id?: number | null;
   control_mode?: ControlMode;
+  sensor_control_enabled?: boolean;
 }
 
 export async function createDevice(data: CreateDevicePayload): Promise<Device> {
@@ -175,4 +186,8 @@ export async function updateDevice(
 ): Promise<Device> {
   const payload = await http.put<DeviceApiPayload>(`/devices/${id}`, data);
   return mapDevicePayload(payload);
+}
+
+export async function deleteDevice(id: number): Promise<void> {
+  await http.delete(`/devices/${id}`);
 }

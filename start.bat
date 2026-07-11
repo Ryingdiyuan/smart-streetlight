@@ -4,20 +4,30 @@ title Smart Streetlight System
 
 setlocal enabledelayedexpansion
 
-rem ========================================
-rem Smart Streetlight System - one-click start
-rem ========================================
-
 set "BACKEND_DIR=%~dp0backend"
 set "FRONTEND_DIR=%~dp0frontend"
+set "HARDWARE_FRONTEND_DIR=%~dp0hardware-frontend"
 set "BACKEND_PORT=8000"
 set "FRONTEND_PORT=5173"
+set "HARDWARE_FRONTEND_PORT=5174"
+set "BACKEND_HOST=0.0.0.0"
+set "FRONTEND_HOST=0.0.0.0"
+set "HARDWARE_FRONTEND_HOST=0.0.0.0"
 set "BACKEND_PYTHON=python"
+set "CONDA_BACKEND_PYTHON=%BACKEND_DIR%\.conda\python.exe"
+set "VENV_BACKEND_PYTHON=%BACKEND_DIR%\.venv\Scripts\python.exe"
 
-if exist "%BACKEND_DIR%\.conda\python.exe" (
-    set "BACKEND_PYTHON=%BACKEND_DIR%\.conda\python.exe"
-) else if exist "%BACKEND_DIR%\.venv\Scripts\python.exe" (
-    set "BACKEND_PYTHON=%BACKEND_DIR%\.venv\Scripts\python.exe"
+if exist "%CONDA_BACKEND_PYTHON%" (
+    "%CONDA_BACKEND_PYTHON%" -c "import sys" >nul 2>nul
+    if !errorlevel! equ 0 (
+        set "BACKEND_PYTHON=%CONDA_BACKEND_PYTHON%"
+    )
+)
+if "%BACKEND_PYTHON%"=="python" if exist "%VENV_BACKEND_PYTHON%" (
+    "%VENV_BACKEND_PYTHON%" -c "import sys" >nul 2>nul
+    if !errorlevel! equ 0 (
+        set "BACKEND_PYTHON=%VENV_BACKEND_PYTHON%"
+    )
 )
 
 echo ============================================
@@ -25,8 +35,26 @@ echo    Smart Streetlight System - Start
 echo ============================================
 echo.
 
+if not exist "%BACKEND_DIR%" (
+    echo [ERROR] Missing backend directory: %BACKEND_DIR%
+    pause
+    exit /b 1
+)
+
+if not exist "%FRONTEND_DIR%" (
+    echo [ERROR] Missing frontend directory: %FRONTEND_DIR%
+    pause
+    exit /b 1
+)
+
+if not exist "%HARDWARE_FRONTEND_DIR%" (
+    echo [ERROR] Missing hardware-frontend directory: %HARDWARE_FRONTEND_DIR%
+    pause
+    exit /b 1
+)
+
 rem ---- 1. Check backend dependencies ----
-echo [1/4] Checking backend Python dependencies...
+echo [1/5] Checking backend Python dependencies...
 cd /d "%BACKEND_DIR%"
 "%BACKEND_PYTHON%" -c "import fastapi, uvicorn" 2>nul
 if !errorlevel! neq 0 (
@@ -44,7 +72,7 @@ if !errorlevel! neq 0 (
 )
 
 rem ---- 2. Check / create database ----
-echo [2/4] Checking database...
+echo [2/5] Checking database...
 set "MYSQL_HOST=127.0.0.1"
 set "MYSQL_PORT=3306"
 set "MYSQL_USER=root"
@@ -85,7 +113,7 @@ if !errorlevel! neq 0 (
 )
 
 rem ---- 3. Check frontend dependencies ----
-echo [3/4] Checking frontend dependencies...
+echo [3/5] Checking frontend dependencies...
 cd /d "%FRONTEND_DIR%"
 if exist node_modules (
     echo   [OK] Frontend dependencies are ready
@@ -100,19 +128,70 @@ if exist node_modules (
     echo   [OK] Frontend dependencies installed
 )
 
-rem ---- 4. Start services ----
-echo [4/4] Starting services...
+rem ---- 4. Check hardware frontend dependencies ----
+echo [4/5] Checking hardware frontend dependencies...
+cd /d "%HARDWARE_FRONTEND_DIR%"
+if exist node_modules (
+    echo   [OK] Hardware frontend dependencies are ready
+) else (
+    echo   [!] Missing dependencies, installing...
+    call npm install
+    if !errorlevel! neq 0 (
+        echo   [ERROR] Failed to install hardware frontend dependencies.
+        pause
+        exit /b 1
+    )
+    echo   [OK] Hardware frontend dependencies installed
+)
+
+rem ---- 5. Start services ----
+echo [5/5] Starting services...
 echo.
 
-echo   ^> Starting backend http://localhost:%BACKEND_PORT% ...
-cd /d "%BACKEND_DIR%"
-start "smart-streetlight-backend" cmd /c ""%BACKEND_PYTHON%" -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT% & pause"
+call :check_port %BACKEND_PORT%
+if !errorlevel! equ 0 (
+    echo   [SKIP] Backend is already listening on http://localhost:%BACKEND_PORT%
+) else (
+    echo   ^> Starting backend http://localhost:%BACKEND_PORT% ...
+    cd /d "%BACKEND_DIR%"
+    set "WINDOW_DIR=%BACKEND_DIR%"
+    set "WINDOW_COMMAND=""%BACKEND_PYTHON%"" -m uvicorn app.main:app --reload --host %BACKEND_HOST% --port %BACKEND_PORT%"
+    call :start_window
+    timeout /t 2 /nobreak >nul
+)
 
-timeout /t 3 /nobreak >nul
+call :check_port %FRONTEND_PORT%
+if !errorlevel! equ 0 (
+    echo   [SKIP] Frontend is already listening on http://localhost:%FRONTEND_PORT%
+) else (
+    echo   ^> Starting frontend http://localhost:%FRONTEND_PORT% ...
+    cd /d "%FRONTEND_DIR%"
+    set "WINDOW_DIR=%FRONTEND_DIR%"
+    set "WINDOW_COMMAND=npm run dev -- --host %FRONTEND_HOST% --port %FRONTEND_PORT%"
+    call :start_window
+    timeout /t 2 /nobreak >nul
+)
 
-echo   ^> Starting frontend http://localhost:%FRONTEND_PORT% ...
-cd /d "%FRONTEND_DIR%"
-start "smart-streetlight-frontend" cmd /c "npm run dev -- --host 127.0.0.1 --port %FRONTEND_PORT% & pause"
+call :check_port %HARDWARE_FRONTEND_PORT%
+if !errorlevel! equ 0 (
+    echo   [SKIP] Hardware frontend is already listening on http://localhost:%HARDWARE_FRONTEND_PORT%
+) else (
+    echo   ^> Starting hardware frontend http://localhost:%HARDWARE_FRONTEND_PORT% ...
+    cd /d "%HARDWARE_FRONTEND_DIR%"
+    set "WINDOW_DIR=%HARDWARE_FRONTEND_DIR%"
+    set "WINDOW_COMMAND=npm run dev -- --host %HARDWARE_FRONTEND_HOST% --port %HARDWARE_FRONTEND_PORT%"
+    call :start_window
+    timeout /t 2 /nobreak >nul
+)
+
+echo.
+echo   ^> Opening browser pages...
+set "OPEN_URL=http://localhost:%FRONTEND_PORT%"
+call :open_url
+set "OPEN_URL=http://localhost:%HARDWARE_FRONTEND_PORT%"
+call :open_url
+set "OPEN_URL=http://localhost:%BACKEND_PORT%/docs"
+call :open_url
 
 echo.
 echo ============================================
@@ -120,6 +199,7 @@ echo    Started
 echo ============================================
 echo.
 echo   Frontend : http://localhost:%FRONTEND_PORT%
+echo   Hardware : http://localhost:%HARDWARE_FRONTEND_PORT%
 echo   Backend  : http://localhost:%BACKEND_PORT%
 echo   API Docs : http://localhost:%BACKEND_PORT%/docs
 echo.
@@ -128,3 +208,16 @@ echo.
 echo ============================================
 echo.
 pause
+exit /b 0
+
+:check_port
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-NetTCPConnection -LocalPort %1 -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>nul
+exit /b %errorlevel%
+
+:start_window
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$wd = $env:WINDOW_DIR; $cmd = $env:WINDOW_COMMAND; Start-Process -FilePath 'cmd.exe' -WorkingDirectory $wd -ArgumentList '/k', $cmd | Out-Null" >nul 2>nul
+exit /b %errorlevel%
+
+:open_url
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process $env:OPEN_URL | Out-Null" >nul 2>nul
+exit /b %errorlevel%

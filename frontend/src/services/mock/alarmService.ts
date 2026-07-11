@@ -18,5 +18,6 @@ export async function handleAlarm(alarmId: string): Promise<AlarmRecord> {
   }
 
   target.handled = true;
+  target.handledAt = new Date().toLocaleString("zh-CN", { hour12: false });
   return structuredClone(target);
 }

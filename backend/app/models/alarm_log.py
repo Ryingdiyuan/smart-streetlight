@@ -10,10 +10,15 @@ class AlarmLog(Base):
     __tablename__ = "alarm_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
-    device_id: Mapped[int] = mapped_column(
+    device_id: Mapped[int | None] = mapped_column(
         ForeignKey("devices.id"),
         index=True,
-        nullable=False,
+        nullable=True,
+    )
+    sensor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sensors.id"),
+        index=True,
+        nullable=True,
     )
     alarm_type: Mapped[str] = mapped_column(String(50), nullable=False)
     alarm_level: Mapped[str] = mapped_column(String(20), default="warning", nullable=False)

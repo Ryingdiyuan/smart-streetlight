@@ -13,6 +13,7 @@ class DeviceBase(BaseModel):
     sensor_id: int | None = None
     lamp_status: str = "OFF"
     control_mode: str = "manual"
+    sensor_control_enabled: bool = True
 
 
 class DeviceCreate(DeviceBase):
@@ -29,6 +30,7 @@ class DeviceUpdate(BaseModel):
     sensor_id: int | None = None
     lamp_status: str | None = None
     control_mode: str | None = None
+    sensor_control_enabled: bool | None = None
 
 
 class DeviceRead(DeviceBase):

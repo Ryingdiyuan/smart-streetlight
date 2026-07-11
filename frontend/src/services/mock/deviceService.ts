@@ -112,8 +112,9 @@ export async function createDevice(data: {
   location?: string;
   latitude?: number;
   longitude?: number;
-  sensor_id?: number;
+  sensor_id?: number | null;
   control_mode?: "manual" | "auto";
+  sensor_control_enabled?: boolean;
 }): Promise<Device> {
   await delay();
 
@@ -133,7 +134,8 @@ export async function createDevice(data: {
     lampStatus: "OFF",
     lastHeartbeatAt: "--",
     controlMode: data.control_mode ?? "manual",
-    sensorId: data.sensor_id,
+    sensorControlEnabled: data.sensor_control_enabled ?? true,
+    sensorId: data.sensor_id ?? undefined,
   };
 
   const createdDetail: DeviceDetail = {
@@ -162,8 +164,9 @@ export async function updateDevice(
     longitude?: number;
     device_name?: string;
     location?: string;
-    sensor_id?: number;
+    sensor_id?: number | null;
     control_mode?: "manual" | "auto";
+    sensor_control_enabled?: boolean;
   },
 ): Promise<Device> {
   await delay();
@@ -173,17 +176,31 @@ export async function updateDevice(
   if (data.longitude !== undefined) device.longitude = data.longitude;
   if (data.device_name) device.deviceName = data.device_name;
   if (data.location !== undefined) device.location = data.location;
-  if (data.sensor_id !== undefined) device.sensorId = data.sensor_id;
+  if (data.sensor_id !== undefined) device.sensorId = data.sensor_id ?? undefined;
   if (data.control_mode !== undefined) device.controlMode = data.control_mode;
+  if (data.sensor_control_enabled !== undefined) device.sensorControlEnabled = data.sensor_control_enabled;
 
   // Also update in mockDeviceDetails
   const detail = mockDeviceDetails[id];
   if (detail) {
     if (data.latitude !== undefined) detail.latitude = data.latitude;
     if (data.longitude !== undefined) detail.longitude = data.longitude;
-    if (data.sensor_id !== undefined) detail.sensorId = data.sensor_id;
+    if (data.sensor_id !== undefined) detail.sensorId = data.sensor_id ?? undefined;
     if (data.control_mode !== undefined) detail.controlMode = data.control_mode;
+    if (data.sensor_control_enabled !== undefined) detail.sensorControlEnabled = data.sensor_control_enabled;
   }
 
   return structuredClone(device);
+}
+
+export async function deleteDevice(id: number): Promise<void> {
+  await delay();
+
+  const deviceIndex = mockDevices.findIndex((device) => device.id === id);
+  if (deviceIndex === -1) {
+    throw new Error("设备不存在");
+  }
+
+  mockDevices.splice(deviceIndex, 1);
+  delete mockDeviceDetails[id];
 }

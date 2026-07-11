@@ -14,6 +14,9 @@ from app.schemas.simulator import (
     SimulatorConfigRead,
     SimulatorConfigUpdate,
     SimulatorLogRead,
+    SimulatorSensorBatchRunningItemRead,
+    SimulatorSensorBatchRunningRead,
+    SimulatorSensorBatchRunningUpdate,
     SimulatorSensorCreate,
     SimulatorSensorRead,
     SimulatorSensorUpdate,
@@ -174,8 +177,6 @@ def update_simulator_sensor(
 
     if "online" in update_data and not update_data["online"]:
         sync_sensor_connection_state(db, sensor, online=False)
-    elif "running" in update_data and update_data["running"] is False:
-        sync_sensor_connection_state(db, sensor, online=False)
 
     db.commit()
     db.refresh(sensor)
@@ -213,14 +214,77 @@ def stop_simulator_sensor(
     db: Session = Depends(get_db),
     _current_user: object = Depends(require_admin),
 ) -> dict:
-    sensor = get_sensor_or_404(db, sensor_id)
-    sync_sensor_connection_state(db, sensor, online=False)
-    db.commit()
+    get_sensor_or_404(db, sensor_id)
     sync_sensors_snapshot(db)
     state = simulator_manager.set_running(sensor_id, False)
     if state is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模拟传感器不存在")
     return state
+
+
+@router.put("/sensors/running/batch", response_model=SimulatorSensorBatchRunningRead)
+def batch_update_simulator_sensor_running(
+    payload: SimulatorSensorBatchRunningUpdate,
+    db: Session = Depends(get_db),
+    _current_user: object = Depends(require_admin),
+) -> SimulatorSensorBatchRunningRead:
+    sensor_ids = list(dict.fromkeys(payload.sensor_ids))
+    if not sensor_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请至少选择一个传感器")
+
+    sensors = db.query(Sensor).filter(Sensor.id.in_(sensor_ids)).all()
+    sensor_map = {sensor.id: sensor for sensor in sensors}
+
+    sync_sensors_snapshot(db)
+
+    results: list[SimulatorSensorBatchRunningItemRead] = []
+    success_count = 0
+    failed_count = 0
+
+    for sensor_id in sensor_ids:
+        sensor = sensor_map.get(sensor_id)
+        if sensor is None:
+            failed_count += 1
+            results.append(
+                SimulatorSensorBatchRunningItemRead(
+                    sensor_id=sensor_id,
+                    sensor_code=f"sensor-{sensor_id}",
+                    result="failed",
+                    running=payload.running,
+                )
+            )
+            continue
+
+        state = simulator_manager.set_running(sensor_id, payload.running)
+        if state is None:
+            failed_count += 1
+            results.append(
+                SimulatorSensorBatchRunningItemRead(
+                    sensor_id=sensor_id,
+                    sensor_code=sensor.sensor_code,
+                    result="failed",
+                    running=payload.running,
+                )
+            )
+            continue
+
+        success_count += 1
+        results.append(
+            SimulatorSensorBatchRunningItemRead(
+                sensor_id=sensor_id,
+                sensor_code=sensor.sensor_code,
+                result="success",
+                running=payload.running,
+            )
+        )
+
+    return SimulatorSensorBatchRunningRead(
+        action="start" if payload.running else "stop",
+        total=len(sensor_ids),
+        success_count=success_count,
+        failed_count=failed_count,
+        results=results,
+    )
 
 
 @router.delete("/sensors/{sensor_id}")

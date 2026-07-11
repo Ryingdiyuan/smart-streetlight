@@ -22,7 +22,7 @@ class Sensor(Base):
     base_light: Mapped[int] = mapped_column(Integer, default=120)
     variance: Mapped[int] = mapped_column(Integer, default=35)
     voltage_base: Mapped[float] = mapped_column(Float, default=220.5)
-    telemetry_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
+    telemetry_interval_seconds: Mapped[int] = mapped_column(Integer, default=20)
     status_every: Mapped[int] = mapped_column(Integer, default=1)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

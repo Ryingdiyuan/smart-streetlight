@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -19,6 +19,7 @@ class Device(Base):
     status: Mapped[str] = mapped_column(String(20), default="offline")
     lamp_status: Mapped[str] = mapped_column(String(20), default="OFF")
     control_mode: Mapped[str] = mapped_column(String(20), default="manual")
+    sensor_control_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

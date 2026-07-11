@@ -512,7 +512,7 @@ onUnmounted(() => {
 .map-page {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: calc(100vh - 180px);
 }
 
 /* ---- 头部 ---- */
@@ -573,7 +573,7 @@ onUnmounted(() => {
 .map-container-wrapper {
   position: relative;
   flex: 1;
-  min-height: 400px;
+  min-height: calc(100vh - 280px);
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border-color, #e2e8f0);

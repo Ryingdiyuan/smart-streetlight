@@ -2,7 +2,7 @@ export type DeviceStatus = "online" | "offline";
 export type LampStatus = "ON" | "OFF";
 export type ControlMode = "manual" | "auto";
 export type AlarmLevel = "INFO" | "WARN" | "CRITICAL";
-export type AlarmType = "DEVICE_OFFLINE" | "LIGHT_ABNORMAL" | "COMMAND_FAILED";
+export type AlarmType = "DEVICE_OFFLINE" | "SENSOR_OFFLINE" | "LIGHT_ABNORMAL" | "COMMAND_FAILED";
 export type CommandType = "TURN_ON" | "TURN_OFF" | "SET_BRIGHTNESS";
 export type CommandSource = "manual" | "auto";
 
@@ -17,6 +17,7 @@ export interface Device {
   lampStatus: LampStatus;
   lastHeartbeatAt: string;
   controlMode?: ControlMode;
+  sensorControlEnabled?: boolean;
   sensorId?: number;
   sensorCode?: string;
   sensorName?: string;
@@ -75,10 +76,14 @@ export interface BatchCommandSummary {
 export interface AlarmRecord {
   id: string;
   deviceId: string;
+  sensorId?: number;
+  sensorCode?: string;
+  sensorName?: string;
   alarmType: AlarmType;
   alarmLevel: AlarmLevel;
   alarmContent: string;
   handled: boolean;
+  handledAt?: string;
   createdAt: string;
 }
 

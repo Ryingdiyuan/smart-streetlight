@@ -28,6 +28,7 @@ export interface DeviceApiPayload {
   sensor_name?: string | null;
   lamp_status?: string | null;
   control_mode?: string | null;
+  sensor_control_enabled?: boolean | null;
 }
 
 export interface SensorApiPayload {
@@ -90,7 +91,11 @@ export interface BatchControlLogApiPayload {
 
 export interface AlarmApiPayload {
   id: number;
-  device_id: number;
+  device_id?: number | null;
+  sensor_id?: number | null;
+  device_code?: string | null;
+  sensor_code?: string | null;
+  sensor_name?: string | null;
   alarm_type: string;
   alarm_level: string;
   alarm_content: string;
@@ -145,7 +150,7 @@ export function mapAlarmLevel(level: string): AlarmLevel {
   return "INFO";
 }
 
-export function mapAlarmType(type: string): AlarmType {
+export function mapAlarmType(type: string, sensorId?: number | null): AlarmType {
   const normalized = type.toUpperCase();
   if (normalized === "COMMAND_FAILED") {
     return "COMMAND_FAILED";
@@ -153,7 +158,7 @@ export function mapAlarmType(type: string): AlarmType {
   if (normalized === "LIGHT_ABNORMAL") {
     return "LIGHT_ABNORMAL";
   }
-  return "DEVICE_OFFLINE";
+  return sensorId != null ? "SENSOR_OFFLINE" : "DEVICE_OFFLINE";
 }
 
 export function mapCommandResult(result: string): CommandLog["result"] {
@@ -186,6 +191,7 @@ export function mapDevicePayload(payload: DeviceApiPayload): Device {
     lampStatus: mapLampStatus(payload.lamp_status),
     lastHeartbeatAt: formatDateTime(payload.last_heartbeat_at),
     controlMode: mapControlMode(payload.control_mode),
+    sensorControlEnabled: payload.sensor_control_enabled ?? true,
     sensorId: payload.sensor_id ?? undefined,
     sensorCode: payload.sensor_code ?? undefined,
     sensorName: payload.sensor_name ?? undefined,
@@ -267,11 +273,19 @@ export function mapBatchCommandSummaryPayload(
 export function mapAlarmPayload(payload: AlarmApiPayload, deviceCode?: string): AlarmRecord {
   return {
     id: String(payload.id),
-    deviceId: deviceCode ?? String(payload.device_id),
-    alarmType: mapAlarmType(payload.alarm_type),
+    deviceId:
+      deviceCode ??
+      payload.device_code ??
+      payload.sensor_code ??
+      (payload.device_id != null ? String(payload.device_id) : payload.sensor_id != null ? String(payload.sensor_id) : "--"),
+    sensorId: payload.sensor_id ?? undefined,
+    sensorCode: payload.sensor_code ?? undefined,
+    sensorName: payload.sensor_name ?? undefined,
+    alarmType: mapAlarmType(payload.alarm_type, payload.sensor_id),
     alarmLevel: mapAlarmLevel(payload.alarm_level),
     alarmContent: payload.alarm_content,
     handled: payload.handled,
+    handledAt: formatDateTime(payload.handled_at),
     createdAt: formatDateTime(payload.created_at),
   };
 }

@@ -8,6 +8,15 @@
       <div class="button-row">
         <p class="section-note">查看设备详情、阈值配置、控制日志和关联告警。</p>
         <button class="ghost-button" type="button" @click="goBackToList">返回设备列表</button>
+        <button
+          v-if="canOperateDevices"
+          class="danger-button"
+          type="button"
+          :disabled="deletingDevice"
+          @click="handleDeleteDevice"
+        >
+          {{ deletingDevice ? "删除中..." : "删除路灯" }}
+        </button>
       </div>
     </header>
 
@@ -50,6 +59,54 @@
             <dd>{{ device.lastHeartbeatAt }}</dd>
           </div>
         </dl>
+
+        <div v-if="canOperateDevices" class="binding-manager">
+          <div class="binding-header">
+            <strong>传感器绑定管理</strong>
+            <span class="inline-note">
+              {{ device.sensorCode ? `${device.sensorCode} - ${device.sensorName ?? "未命名传感器"}` : "当前未绑定传感器" }}
+            </span>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              <span>选择传感器</span>
+              <select
+                v-model="bindingSensorId"
+                :disabled="loadingSensors || bindingSaving"
+                @focus="bindingInteracting = true"
+                @blur="bindingInteracting = false"
+              >
+                <option :value="undefined">请选择在线且未绑定的传感器</option>
+                <option v-for="sensor in selectableSensors" :key="sensor.id" :value="sensor.id">
+                  {{ sensor.sensorCode }} - {{ sensor.sensorName }}
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <div class="button-row">
+            <button
+              class="primary-button"
+              type="button"
+              :disabled="loadingSensors || bindingSaving || bindingSensorId == null"
+              @click="handleBindSensor"
+            >
+              {{ bindingSaving ? "保存中..." : device.sensorId ? "更新绑定" : "绑定传感器" }}
+            </button>
+            <button
+              class="ghost-button"
+              type="button"
+              :disabled="bindingSaving || !device.sensorId"
+              @click="handleUnbindSensor"
+            >
+              解绑传感器
+            </button>
+            <button class="ghost-button" type="button" :disabled="loadingSensors || bindingSaving" @click="loadSelectableSensors">
+              {{ loadingSensors ? "刷新中..." : "刷新可选传感器" }}
+            </button>
+          </div>
+        </div>
       </PanelCard>
 
       <PanelCard title="控制与阈值" subtitle="管理员和维修人员可保存阈值并下发控制命令">
@@ -59,7 +116,18 @@
         </div>
         <p v-else class="inline-note">当前角色仅可查看阈值配置，不能执行控制或保存修改。</p>
 
+        <div v-if="canOperateDevices" class="button-row">
+          <button class="ghost-button" :disabled="sensorControlSaving" @click="toggleSensorControl">
+            {{ sensorControlSaving ? "切换中..." : sensorControlButtonText }}
+          </button>
+          <span class="inline-note">{{ sensorControlHint }}</span>
+        </div>
+
         <div class="detail-tip-grid">
+          <div class="summary-box">
+            <strong>传感器控制</strong>
+            <span>{{ sensorControlStatusText }}</span>
+          </div>
           <div class="summary-box">
             <strong>自动控制</strong>
             <span>{{ threshold.enabled ? "已启用" : "未启用" }}</span>
@@ -262,14 +330,22 @@ import PanelCard from "@/components/PanelCard.vue";
 import StatCard from "@/components/StatCard.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import TrendLineChart from "@/components/TrendLineChart.vue";
-import { getDeviceDetail, sendDeviceCommand, updateDevice, updateDeviceThreshold } from "@/services/deviceService";
+import { deleteDevice, getDeviceDetail, sendDeviceCommand, updateDevice, updateDeviceThreshold } from "@/services/deviceService";
+import { getSensorList } from "@/services/sensorService";
 import { can } from "@/services/permissions";
-import type { CommandLog, DeviceDetail, ThresholdConfig } from "@/types/models";
+import type { CommandLog, DeviceDetail, SensorSummary, ThresholdConfig } from "@/types/models";
 
 const route = useRoute();
 const router = useRouter();
 const device = ref<DeviceDetail | null>(null);
 const actionMessage = ref("可查看真实后端阈值和控制状态");
+const sensorControlSaving = ref(false);
+const deletingDevice = ref(false);
+const bindingSaving = ref(false);
+const loadingSensors = ref(false);
+const bindingInteracting = ref(false);
+const availableSensors = ref<SensorSummary[]>([]);
+const bindingSensorId = ref<number | undefined>(undefined);
 let refreshTimer: number | undefined;
 let commandRefreshTimer: number | undefined;
 
@@ -281,6 +357,25 @@ const threshold = reactive<ThresholdConfig>({
 });
 
 const canOperateDevices = computed(() => can("operateDevices"));
+const sensorControlEnabled = computed(() => device.value?.sensorControlEnabled ?? true);
+const sensorControlButtonText = computed(() =>
+  sensorControlEnabled.value ? "暂停传感器控制" : "启用传感器控制",
+);
+const sensorControlStatusText = computed(() =>
+  sensorControlEnabled.value ? "已启用" : "已暂停",
+);
+const sensorControlHint = computed(() =>
+  sensorControlEnabled.value
+    ? "当前允许传感器数据影响路灯状态"
+    : "当前仅保留上报、心跳和在线状态，不再影响路灯状态",
+);
+const selectableSensors = computed(() =>
+  availableSensors.value.filter(
+    (sensor) =>
+      sensor.boundDeviceId === device.value?.id ||
+      (sensor.boundDeviceId == null && sensor.status === "online"),
+  ),
+);
 
 // ---- 坐标编辑状态 ----
 const coordEditing = ref(false);
@@ -320,6 +415,37 @@ async function saveCoordEdit() {
     coordEditError.value = e instanceof Error ? e.message : "保存失败";
   } finally {
     coordSaving.value = false;
+  }
+}
+
+async function loadSelectableSensors() {
+  if (!device.value) return;
+  loadingSensors.value = true;
+  const previousSelection = bindingSensorId.value;
+  try {
+    availableSensors.value = await getSensorList();
+    if (device.value.sensorId != null) {
+      bindingSensorId.value = device.value.sensorId;
+      return;
+    }
+
+    if (
+      previousSelection != null &&
+      availableSensors.value.some(
+        (sensor) =>
+          sensor.id === previousSelection &&
+          (sensor.boundDeviceId === device.value?.id || (sensor.boundDeviceId == null && sensor.status === "online")),
+      )
+    ) {
+      bindingSensorId.value = previousSelection;
+      return;
+    }
+
+    bindingSensorId.value = undefined;
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : "可选传感器加载失败";
+  } finally {
+    loadingSensors.value = false;
   }
 }
 
@@ -454,6 +580,10 @@ async function loadDetail() {
   device.value = await getDeviceDetail(currentId);
   if (device.value) {
     Object.assign(threshold, device.value.threshold);
+    await loadSelectableSensors();
+  } else {
+    availableSensors.value = [];
+    bindingSensorId.value = undefined;
   }
   // 延迟等 DOM 渲染后再初始化 mini map
   await nextTick();
@@ -470,6 +600,56 @@ async function saveThreshold() {
   actionMessage.value = "阈值已保存到真实后端";
 }
 
+async function toggleSensorControl() {
+  if (!device.value || !canOperateDevices.value || sensorControlSaving.value) return;
+
+  const nextEnabled = !sensorControlEnabled.value;
+  sensorControlSaving.value = true;
+  try {
+    await updateDevice(device.value.id, {
+      sensor_control_enabled: nextEnabled,
+    });
+    actionMessage.value = nextEnabled
+      ? "已启用传感器控制，路灯会重新受模拟器数据影响"
+      : "已暂停传感器控制，后续上报不会再改写路灯状态";
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : "传感器控制切换失败";
+  } finally {
+    sensorControlSaving.value = false;
+  }
+}
+
+async function handleBindSensor() {
+  if (!device.value || !canOperateDevices.value || bindingSaving.value || bindingSensorId.value == null) return;
+  bindingSaving.value = true;
+  try {
+    await updateDevice(device.value.id, { sensor_id: bindingSensorId.value });
+    actionMessage.value = "传感器绑定已更新";
+    bindingInteracting.value = false;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : "更新传感器绑定失败";
+  } finally {
+    bindingSaving.value = false;
+  }
+}
+
+async function handleUnbindSensor() {
+  if (!device.value || !canOperateDevices.value || bindingSaving.value || device.value.sensorId == null) return;
+  bindingSaving.value = true;
+  try {
+    await updateDevice(device.value.id, { sensor_id: null });
+    actionMessage.value = "传感器已解绑";
+    bindingInteracting.value = false;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : "解绑传感器失败";
+  } finally {
+    bindingSaving.value = false;
+  }
+}
+
 async function handleCommand(command: "TURN_ON" | "TURN_OFF") {
   if (!device.value || !canOperateDevices.value) return;
   const log = await sendDeviceCommand(device.value.id, command);
@@ -483,6 +663,25 @@ async function handleCommand(command: "TURN_ON" | "TURN_OFF") {
   }, 1200);
 }
 
+async function handleDeleteDevice() {
+  const deviceId = device.value?.id ?? Number(route.params.id);
+  if (!canOperateDevices.value || deletingDevice.value || !Number.isFinite(deviceId)) return;
+  const deviceLabel = device.value?.deviceCode ?? `ID ${deviceId}`;
+  if (!window.confirm(`确认删除路灯 ${deviceLabel} 吗？此操作不可恢复。`)) {
+    return;
+  }
+
+  deletingDevice.value = true;
+  try {
+    await deleteDevice(deviceId);
+    await router.push("/devices");
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : "删除路灯失败";
+  } finally {
+    deletingDevice.value = false;
+  }
+}
+
 async function goBackToList() {
   await router.push("/devices");
 }
@@ -490,6 +689,9 @@ async function goBackToList() {
 onMounted(() => {
   void loadDetail();
   refreshTimer = window.setInterval(() => {
+    if (bindingInteracting.value || bindingSaving.value || loadingSensors.value) {
+      return;
+    }
     void loadDetail();
   }, 3000);
 });
@@ -550,6 +752,21 @@ watch(() => route.params.id, loadDetail);
   opacity: 0.7;
 }
 
+.binding-manager {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.binding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 /* ---- 坐标编辑 ---- */
 .coord-card-body {
   position: relative;
@@ -574,6 +791,21 @@ watch(() => route.params.id, loadDetail);
   gap: 0.3rem;
   font-size: 0.85rem;
   color: var(--text-secondary, #64748b);
+}
+
+.danger-button {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecaca;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: rgba(127, 29, 29, 0.28);
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .coord-edit-form .button-row {

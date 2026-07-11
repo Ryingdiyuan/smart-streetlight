@@ -10,4 +10,5 @@ export const {
   sendBatchDeviceCommand,
   createDevice,
   updateDevice,
+  deleteDevice,
 } = createServiceSwitcher(mockService, apiService);

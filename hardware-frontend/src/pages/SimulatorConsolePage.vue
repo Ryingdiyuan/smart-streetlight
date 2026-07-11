@@ -71,10 +71,6 @@
             <input v-model="createForm.sensorName" type="text" placeholder="例如 北门光照传感器" />
           </label>
           <label>
-            <span>安装位置</span>
-            <input v-model="createForm.location" type="text" placeholder="例如 北门路口" />
-          </label>
-          <label>
             <span>基础光照</span>
             <input v-model.number="createForm.baseLight" type="number" min="0" />
           </label>
@@ -87,11 +83,11 @@
             <input v-model.number="createForm.voltageBase" type="number" step="0.1" />
           </label>
           <label>
-            <span>遥测间隔（秒）</span>
+            <span>发送数据间隔（秒）</span>
             <input v-model.number="createForm.telemetryIntervalSeconds" type="number" min="1" />
           </label>
           <label>
-            <span>心跳轮次</span>
+            <span>心跳间隔（秒）</span>
             <input v-model.number="createForm.statusEvery" type="number" min="1" />
           </label>
           <label class="checkbox-field">
@@ -113,19 +109,82 @@
       </PanelCard>
     </div>
 
-    <PanelCard title="传感器模拟列表" subtitle="未绑定传感器的数据不会驱动路灯；绑定后由传感器控制路灯开关">
+    <PanelCard title="发送架构" subtitle="当前已拆分为心跳链路和数据链路两个独立职责模块">
+      <div class="detail-tip-grid">
+        <div class="summary-box">
+          <span>当前查看传感器</span>
+          <strong>{{ activeSensor ? activeSensor.sensorCode : "--" }}</strong>
+        </div>
+        <div class="summary-box">
+          <span>当前运行状态</span>
+          <strong>{{ activeSensor ? (activeSensor.running ? "运行中" : "已停止") : "--" }}</strong>
+        </div>
+      </div>
+
+      <div class="content-grid two-columns">
+        <div class="summary-box">
+          <span>HeartbeatPublisher</span>
+          <strong>负责 status / 心跳存活证明</strong>
+          <div class="table-cell-stack">
+            <span>发送内容：online、lampStatus、timestamp</span>
+            <span class="inline-note">当前状态：{{ heartbeatStateText }}</span>
+            <span class="inline-note">发送节奏：每 {{ activeSensor?.statusEvery ?? "--" }} 秒发送一次</span>
+            <span class="inline-note">最近心跳：{{ activeSensor?.lastStatusAt || "--" }}</span>
+          </div>
+        </div>
+
+        <div class="summary-box">
+          <span>TelemetryPublisher</span>
+          <strong>负责 telemetry / 光照电压等业务数据</strong>
+          <div class="table-cell-stack">
+            <span>发送内容：lightIntensity、lampStatus、voltage、timestamp</span>
+            <span class="inline-note">当前状态：{{ telemetryStateText }}</span>
+            <span class="inline-note">发送节奏：每 {{ activeSensor?.telemetryIntervalSeconds ?? "--" }} 秒一次</span>
+            <span class="inline-note">最近数据：{{ activeSensor?.lastTelemetryAt || "--" }}</span>
+          </div>
+        </div>
+      </div>
+    </PanelCard>
+
+    <PanelCard title="传感器模拟列表" subtitle="支持单个启停与批量启停；心跳与数据发送状态分列展示">
       <div v-if="refreshing && !sensors.length" class="placeholder-box">正在加载模拟器传感器...</div>
       <div v-else class="table-wrapper">
+        <div class="bulk-action-bar">
+          <div class="bulk-selection-summary">
+            <span class="section-note">已选中 {{ selectedCount }} 个传感器</span>
+          </div>
+          <div class="bulk-action-buttons">
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !sensors.length" @click="selectAllSensors">
+              全选
+            </button>
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="clearSelection">
+              清空
+            </button>
+            <button class="primary-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchRunning(true)">
+              {{ batchSubmitting ? "执行中..." : "批量启动" }}
+            </button>
+            <button class="ghost-button" type="button" :disabled="batchSubmitting || !selectedCount" @click="handleBatchRunning(false)">
+              {{ batchSubmitting ? "执行中..." : "批量停止" }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="batchMessage" class="bulk-feedback" :class="{ 'bulk-feedback-error': batchMessageTone === 'error' }">
+          {{ batchMessage }}
+        </div>
+
         <table>
           <thead>
             <tr>
+              <th class="table-checkbox">选择</th>
               <th>传感器编码</th>
               <th>传感器名称</th>
               <th>位置</th>
               <th>绑定路灯</th>
               <th>控制模式</th>
               <th>运行状态</th>
-              <th>模拟上报状态</th>
+              <th>数据发送</th>
+              <th>心跳发送</th>
               <th>当前光照</th>
               <th>灯状态</th>
               <th>间隔</th>
@@ -136,6 +195,9 @@
           </thead>
           <tbody>
             <tr v-for="sensor in sensors" :key="sensor.sensorId">
+              <td class="table-checkbox">
+                <input v-model="selectedSensorIds" type="checkbox" :value="sensor.sensorId" :disabled="batchSubmitting" />
+              </td>
               <td>{{ sensor.sensorCode }}</td>
               <td>{{ sensor.sensorName }}</td>
               <td>{{ sensor.location || "-" }}</td>
@@ -150,11 +212,14 @@
                 <StatusBadge :status="sensor.running ? 'success' : 'info'" :text="sensor.running ? '运行中' : '已停止'" />
               </td>
               <td>
-                <StatusBadge :status="sensor.online ? 'online' : 'offline'" :text="sensor.online ? '上报在线' : '上报离线'" />
+                <StatusBadge :status="telemetryBadge(sensor).status" :text="telemetryBadge(sensor).text" />
+              </td>
+              <td>
+                <StatusBadge :status="heartbeatBadge(sensor).status" :text="heartbeatBadge(sensor).text" />
               </td>
               <td>{{ sensor.currentLightIntensity }} lx</td>
               <td>{{ sensor.lampStatus.toUpperCase() }}</td>
-              <td>{{ sensor.telemetryIntervalSeconds }}s / {{ sensor.statusEvery }}轮</td>
+              <td>数据 {{ sensor.telemetryIntervalSeconds }}s / 心跳 {{ sensor.statusEvery }}s</td>
               <td>{{ sensor.publishCount }}</td>
               <td>
                 <div class="table-cell-stack">
@@ -167,7 +232,7 @@
                   <button
                     class="ghost-button"
                     type="button"
-                    :disabled="pendingSensorId === sensor.sensorId"
+                    :disabled="pendingSensorId === sensor.sensorId || batchSubmitting"
                     @click="toggleSensor(sensor)"
                   >
                     {{ pendingSensorId === sensor.sensorId ? "处理中..." : sensor.running ? "停止" : "启动" }}
@@ -175,7 +240,7 @@
                   <button
                     class="ghost-button"
                     type="button"
-                    :disabled="pendingSensorId === sensor.sensorId"
+                    :disabled="pendingSensorId === sensor.sensorId || batchSubmitting"
                     @click="openEditModal(sensor)"
                   >
                     编辑
@@ -183,7 +248,7 @@
                   <button
                     class="ghost-button"
                     type="button"
-                    :disabled="pendingSensorId === sensor.sensorId"
+                    :disabled="pendingSensorId === sensor.sensorId || batchSubmitting"
                     @click="handleDeleteSensor(sensor)"
                   >
                     删除
@@ -192,14 +257,14 @@
               </td>
             </tr>
             <tr v-if="!sensors.length">
-              <td colspan="13" class="table-empty">当前没有可管理的模拟传感器</td>
+              <td colspan="15" class="table-empty">当前没有可管理的模拟传感器</td>
             </tr>
           </tbody>
         </table>
       </div>
     </PanelCard>
 
-    <PanelCard title="运行日志" subtitle="显示模拟器连接、发送、命令接收等日志">
+    <PanelCard title="运行日志" subtitle="显示模拟器连接、心跳、数据发送和命令接收等日志">
       <div class="button-row simulator-actions-row simulator-toolbar">
         <label class="simulator-filter">
           <span>级别筛选</span>
@@ -250,10 +315,6 @@
             <input v-model="editForm.sensorName" type="text" />
           </label>
           <label>
-            <span>安装位置</span>
-            <input v-model="editForm.location" type="text" />
-          </label>
-          <label>
             <span>基础光照</span>
             <input v-model.number="editForm.baseLight" type="number" min="0" />
           </label>
@@ -266,11 +327,11 @@
             <input v-model.number="editForm.voltageBase" type="number" step="0.1" />
           </label>
           <label>
-            <span>遥测间隔（秒）</span>
+            <span>发送数据间隔（秒）</span>
             <input v-model.number="editForm.telemetryIntervalSeconds" type="number" min="1" />
           </label>
           <label>
-            <span>心跳轮次</span>
+            <span>心跳间隔（秒）</span>
             <input v-model.number="editForm.statusEvery" type="number" min="1" />
           </label>
           <label class="checkbox-field">
@@ -313,6 +374,7 @@ import {
   stopSimulatorSensor,
   updateSimulatorConfig,
   updateSimulatorSensor,
+  updateSimulatorSensorsRunning,
 } from "@/services/api/simulatorService";
 import type {
   DashboardStat,
@@ -346,7 +408,7 @@ const createForm = reactive({
   baseLight: 120,
   variance: 35,
   voltageBase: 220.5,
-  telemetryIntervalSeconds: 5,
+  telemetryIntervalSeconds: 20,
   statusEvery: 1,
   online: true,
   autoStart: true,
@@ -358,7 +420,7 @@ const editForm = reactive({
   baseLight: 120,
   variance: 35,
   voltageBase: 220.5,
-  telemetryIntervalSeconds: 5,
+  telemetryIntervalSeconds: 20,
   statusEvery: 1,
   online: true,
   running: true,
@@ -372,9 +434,13 @@ const savingConfig = ref(false);
 const clearingLogs = ref(false);
 const creatingSensor = ref(false);
 const savingEdit = ref(false);
+const batchSubmitting = ref(false);
 const pendingSensorId = ref<number | null>(null);
+const selectedSensorIds = ref<number[]>([]);
 const logLevelFilter = ref("");
 const createMessage = ref("");
+const batchMessage = ref("");
+const batchMessageTone = ref<"success" | "error">("success");
 const editingSensor = ref<SimulatorSensor | null>(null);
 let autoRefreshTimer: number | undefined;
 
@@ -383,7 +449,7 @@ const summaryStats = computed<DashboardStat[]>(() => [
   {
     label: "运行中传感器",
     value: String(sensors.value.filter((item) => item.running).length),
-    helper: "正在持续发送 telemetry/status",
+    helper: "模拟器正在处理心跳与数据发送",
   },
   {
     label: "已绑定路灯",
@@ -397,12 +463,71 @@ const summaryStats = computed<DashboardStat[]>(() => [
   },
 ]);
 
+const selectedCount = computed(() => selectedSensorIds.value.length);
+
+const activeSensor = computed<SimulatorSensor | null>(() => {
+  if (!sensors.value.length) {
+    return null;
+  }
+  if (selectedSensorIds.value.length > 0) {
+    return sensors.value.find((item) => item.sensorId === selectedSensorIds.value[0]) ?? sensors.value[0];
+  }
+  if (editingSensor.value) {
+    return sensors.value.find((item) => item.sensorId === editingSensor.value?.sensorId) ?? sensors.value[0];
+  }
+  return sensors.value[0];
+});
+
+const heartbeatStateText = computed(() => {
+  if (!activeSensor.value) {
+    return "--";
+  }
+  if (!activeSensor.value.running) {
+    return "未运行";
+  }
+  return activeSensor.value.online ? "持续发送在线心跳" : "持续发送离线心跳";
+});
+
+const telemetryStateText = computed(() => {
+  if (!activeSensor.value) {
+    return "--";
+  }
+  if (!activeSensor.value.running) {
+    return "未运行";
+  }
+  return activeSensor.value.online ? "按间隔发送业务数据" : "传感器离线，业务数据暂停";
+});
+
+function telemetryBadge(sensor: SimulatorSensor) {
+  if (!sensor.running) {
+    return { status: "info" as const, text: "未运行" };
+  }
+  if (!sensor.online) {
+    return { status: "warning" as const, text: "已暂停（离线）" };
+  }
+  return { status: "success" as const, text: "发送中" };
+}
+
+function heartbeatBadge(sensor: SimulatorSensor) {
+  if (!sensor.running) {
+    return { status: "info" as const, text: "已停止" };
+  }
+  return sensor.online
+    ? { status: "online" as const, text: "在线心跳" }
+    : { status: "offline" as const, text: "离线心跳" };
+}
+
 function syncConfigForm() {
   configForm.enabled = config.enabled;
   configForm.host = config.host;
   configForm.port = config.port;
   configForm.username = config.username;
   configForm.password = config.password;
+}
+
+function syncSelectedSensorIds() {
+  const validIds = new Set(sensors.value.map((sensor) => sensor.sensorId));
+  selectedSensorIds.value = selectedSensorIds.value.filter((id) => validIds.has(id));
 }
 
 function resetCreateForm() {
@@ -412,7 +537,7 @@ function resetCreateForm() {
   createForm.baseLight = 120;
   createForm.variance = 35;
   createForm.voltageBase = 220.5;
-  createForm.telemetryIntervalSeconds = 5;
+  createForm.telemetryIntervalSeconds = 20;
   createForm.statusEvery = 1;
   createForm.online = true;
   createForm.autoStart = true;
@@ -428,6 +553,19 @@ function fillEditForm(sensor: SimulatorSensor) {
   editForm.statusEvery = sensor.statusEvery;
   editForm.online = sensor.online;
   editForm.running = sensor.running;
+}
+
+function selectAllSensors() {
+  selectedSensorIds.value = sensors.value.map((sensor) => sensor.sensorId);
+}
+
+function clearSelection() {
+  selectedSensorIds.value = [];
+}
+
+function buildBatchMessage(action: "start" | "stop", total: number, successCount: number, failedCount: number) {
+  const actionText = action === "start" ? "批量启动" : "批量停止";
+  return `${actionText}已执行，共 ${total} 个传感器，成功 ${successCount} 个，失败 ${failedCount} 个。`;
 }
 
 async function loadLogs() {
@@ -446,6 +584,7 @@ async function loadConsoleData() {
     Object.assign(config, nextConfig);
     syncConfigForm();
     sensors.value = nextSensors;
+    syncSelectedSensorIds();
     await loadLogs();
   } finally {
     refreshing.value = false;
@@ -555,6 +694,27 @@ async function toggleSensor(sensor: SimulatorSensor) {
   }
 }
 
+async function handleBatchRunning(running: boolean) {
+  if (!selectedSensorIds.value.length || batchSubmitting.value) {
+    return;
+  }
+
+  batchSubmitting.value = true;
+  batchMessage.value = "";
+  try {
+    const summary = await updateSimulatorSensorsRunning(selectedSensorIds.value, running);
+    batchMessageTone.value = summary.failedCount > 0 ? "error" : "success";
+    batchMessage.value = buildBatchMessage(summary.action, summary.total, summary.successCount, summary.failedCount);
+    clearSelection();
+    await loadConsoleData();
+  } catch (error) {
+    batchMessageTone.value = "error";
+    batchMessage.value = error instanceof Error ? error.message : "批量控制失败";
+  } finally {
+    batchSubmitting.value = false;
+  }
+}
+
 async function handleDeleteSensor(sensor: SimulatorSensor) {
   if (!window.confirm(`确认删除传感器 ${sensor.sensorCode} 吗？`)) {
     return;
@@ -617,6 +777,44 @@ onBeforeUnmount(() => {
 .table-cell-stack {
   display: grid;
   gap: 4px;
+}
+
+.bulk-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.bulk-selection-summary,
+.bulk-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bulk-feedback {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(66, 211, 146, 0.28);
+  background: rgba(15, 118, 110, 0.16);
+  color: #d1fae5;
+  line-height: 1.6;
+}
+
+.bulk-feedback-error {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecaca;
+}
+
+.table-checkbox {
+  width: 56px;
+  text-align: center;
 }
 
 .simulator-log-list {

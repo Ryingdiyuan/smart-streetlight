@@ -178,6 +178,21 @@ export interface SimulatorSensor {
   controlMode?: "manual" | "auto";
 }
 
+export interface SimulatorBatchControlResult {
+  sensorId: number;
+  sensorCode: string;
+  result: "success" | "failed";
+  running: boolean;
+}
+
+export interface SimulatorBatchControlSummary {
+  action: "start" | "stop";
+  total: number;
+  successCount: number;
+  failedCount: number;
+  results: SimulatorBatchControlResult[];
+}
+
 export interface SimulatorLogEntry {
   createdAt: string;
   level: string;
