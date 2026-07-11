@@ -125,6 +125,7 @@ def register_simulator_sensor(
         base_light=payload.base_light,
         variance=payload.variance,
         voltage_base=payload.voltage_base,
+        telemetry_enabled=payload.telemetry_enabled,
         telemetry_interval_seconds=payload.telemetry_interval_seconds,
         status_every=payload.status_every,
     )
@@ -139,6 +140,7 @@ def register_simulator_sensor(
         base_light=payload.base_light,
         variance=payload.variance,
         voltage_base=payload.voltage_base,
+        telemetry_enabled=payload.telemetry_enabled,
         telemetry_interval_seconds=payload.telemetry_interval_seconds,
         status_every=payload.status_every,
         online=payload.online,
@@ -165,6 +167,8 @@ def update_simulator_sensor(
         sensor.variance = update_data["variance"]
     if "voltage_base" in update_data:
         sensor.voltage_base = update_data["voltage_base"]
+    if "telemetry_enabled" in update_data:
+        sensor.telemetry_enabled = update_data["telemetry_enabled"]
     if "telemetry_interval_seconds" in update_data:
         sensor.telemetry_interval_seconds = update_data["telemetry_interval_seconds"]
     if "status_every" in update_data:
@@ -187,6 +191,7 @@ def update_simulator_sensor(
         base_light=update_data.get("base_light"),
         variance=update_data.get("variance"),
         voltage_base=update_data.get("voltage_base"),
+        telemetry_enabled=update_data.get("telemetry_enabled"),
         telemetry_interval_seconds=update_data.get("telemetry_interval_seconds"),
         status_every=update_data.get("status_every"),
         online=update_data.get("online"),

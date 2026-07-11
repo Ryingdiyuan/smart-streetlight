@@ -28,6 +28,7 @@ interface SimulatorSensorPayload {
   base_light: number;
   variance: number;
   voltage_base: number;
+  telemetry_enabled: boolean;
   telemetry_interval_seconds: number;
   status_every: number;
   publish_count: number;
@@ -63,6 +64,7 @@ export interface SimulatorSensorInput {
   baseLight: number;
   variance: number;
   voltageBase: number;
+  telemetryEnabled: boolean;
   telemetryIntervalSeconds: number;
   statusEvery: number;
   online: boolean;
@@ -75,6 +77,7 @@ export interface SimulatorSensorUpdateInput {
   baseLight: number;
   variance: number;
   voltageBase: number;
+  telemetryEnabled: boolean;
   telemetryIntervalSeconds: number;
   statusEvery: number;
   online: boolean;
@@ -111,6 +114,7 @@ function mapSensor(payload: SimulatorSensorPayload): SimulatorSensor {
     baseLight: payload.base_light,
     variance: payload.variance,
     voltageBase: payload.voltage_base,
+    telemetryEnabled: payload.telemetry_enabled,
     telemetryIntervalSeconds: payload.telemetry_interval_seconds,
     statusEvery: payload.status_every,
     publishCount: payload.publish_count,
@@ -158,6 +162,7 @@ export async function registerSimulatorSensor(input: SimulatorSensorInput): Prom
     base_light: input.baseLight,
     variance: input.variance,
     voltage_base: input.voltageBase,
+    telemetry_enabled: input.telemetryEnabled,
     telemetry_interval_seconds: input.telemetryIntervalSeconds,
     status_every: input.statusEvery,
     online: input.online,
@@ -190,6 +195,7 @@ export async function updateSimulatorSensor(
     base_light: input.baseLight,
     variance: input.variance,
     voltage_base: input.voltageBase,
+    telemetry_enabled: input.telemetryEnabled,
     telemetry_interval_seconds: input.telemetryIntervalSeconds,
     status_every: input.statusEvery,
     online: input.online,

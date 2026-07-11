@@ -6,7 +6,7 @@
         <h3>传感器模拟控制台</h3>
       </div>
       <p class="section-note">
-        面向后续硬件接入与 MQTT 联调，保留 Broker 配置、模拟启停、参数编辑和运行日志。设备建档与业务入口已拆分到“软件设备中心”。
+        这里用于模拟传感器的 MQTT 联调。现在心跳发送和数据发送已经分开控制，即使关闭数据发送，也可以继续发送心跳确认传感器仍然在线。
       </p>
     </header>
 
@@ -15,7 +15,7 @@
     </div>
 
     <div class="content-grid two-columns">
-      <PanelCard title="Broker 配置" subtitle="显示并修改当前模拟器连接参数">
+      <PanelCard title="Broker 配置" subtitle="查看并修改当前模拟器连接参数">
         <div class="form-grid">
           <label>
             <span>MQTT Host / IP</span>
@@ -60,42 +60,101 @@
         </div>
       </PanelCard>
 
-      <PanelCard title="软件设备建档已分流" subtitle="业务设备创建、坐标录入与软件入口已迁移到新模块">
+      <PanelCard title="联调说明" subtitle="软件设备和传感器模拟器分离管理">
         <div class="detail-tip-grid">
           <div class="summary-box">
             <span>软件设备中心</span>
-            <strong>负责设备建档与业务入口</strong>
+            <strong>负责创建设备档案与绑定关系</strong>
           </div>
           <div class="summary-box">
-            <span>模拟器控制台</span>
-            <strong>负责 MQTT 模拟与联调验证</strong>
+            <span>模拟控制台</span>
+            <strong>负责心跳、数据和 MQTT 联调</strong>
           </div>
         </div>
 
         <div class="button-row simulator-actions-row">
           <RouterLink class="primary-button" to="/software-devices">前往软件设备中心</RouterLink>
           <RouterLink class="ghost-button" to="/devices">查看设备列表</RouterLink>
-          <span class="inline-note">新建设备档案后，会自动出现在下方模拟列表中用于后续联调。</span>
+          <span class="inline-note">先在软件端完成路灯建档与绑定，再回到这里做传感器联调。</span>
         </div>
       </PanelCard>
     </div>
 
-    <PanelCard title="设备模拟列表" subtitle="运行状态表示是否发数据；模拟上报状态表示下一次发出的 online 值；系统设备状态来自设备列表的真实状态">
+    <PanelCard title="发送架构" subtitle="前端直接展示心跳类与数据类已拆分管理">
+      <div class="detail-tip-grid">
+        <div class="summary-box">
+          <span>当前查看传感器</span>
+          <strong>{{ activeDevice ? activeDevice.deviceCode : "--" }}</strong>
+        </div>
+        <div class="summary-box">
+          <span>运行状态</span>
+          <strong>{{ activeDevice ? (activeDevice.running ? "运行中" : "已停止") : "--" }}</strong>
+        </div>
+      </div>
+
+      <div class="content-grid two-columns">
+        <div class="summary-box">
+          <span>HeartbeatPublisher</span>
+          <strong>只负责 status / 心跳存在性证明</strong>
+          <div class="table-cell-stack">
+            <span>发送内容：online、lampStatus、timestamp</span>
+            <span class="inline-note">
+              当前状态：{{ heartbeatStateText }}
+            </span>
+            <span class="inline-note">
+              调度方式：每 {{ activeDevice?.statusEvery ?? "--" }} 轮发送一次心跳
+            </span>
+            <span class="inline-note">
+              最近心跳：{{ activeDevice?.lastStatusAt || "--" }}
+            </span>
+          </div>
+        </div>
+
+        <div class="summary-box">
+          <span>TelemetryPublisher</span>
+          <strong>只负责 telemetry / 光照电压等业务数据</strong>
+          <div class="table-cell-stack">
+            <span>发送内容：lightIntensity、lampStatus、voltage、timestamp</span>
+            <span class="inline-note">
+              当前状态：{{ telemetryStateText }}
+            </span>
+            <span class="inline-note">
+              调度方式：每 {{ activeDevice?.telemetryIntervalSeconds ?? "--" }} 秒尝试发送一次数据
+            </span>
+            <span class="inline-note">
+              最近数据：{{ activeDevice?.lastTelemetryAt || "--" }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-row simulator-actions-row">
+        <span class="inline-note">
+          页面上的“停数据/开数据”只作用于 TelemetryPublisher；HeartbeatPublisher 仍持续发送心跳，用于确认传感器仍然存在。
+        </span>
+      </div>
+    </PanelCard>
+
+    <PanelCard
+      title="传感器模拟列表"
+      subtitle="运行状态控制整个模拟器；数据发送可单独关闭；心跳仍会按轮次继续发送。"
+    >
       <div v-if="refreshing && !devices.length" class="placeholder-box">正在加载模拟器设备...</div>
       <div v-else class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>设备编码</th>
-              <th>设备名称</th>
+              <th>传感器编码</th>
+              <th>传感器名称</th>
               <th>位置</th>
               <th>运行状态</th>
-              <th>模拟上报状态</th>
-              <th>系统设备状态</th>
+              <th>数据发送</th>
+              <th>心跳发送</th>
+              <th>系统状态</th>
               <th>当前光照</th>
               <th>灯状态</th>
-              <th>间隔</th>
-              <th>发送次数</th>
+              <th>发送间隔</th>
+              <th>数据次数</th>
               <th>最近命令</th>
               <th>操作</th>
             </tr>
@@ -106,10 +165,22 @@
               <td>{{ device.deviceName }}</td>
               <td>{{ device.location || "-" }}</td>
               <td>
-                <StatusBadge :status="device.running ? 'success' : 'info'" :text="device.running ? '运行中' : '已停止'" />
+                <StatusBadge
+                  :status="device.running ? 'success' : 'info'"
+                  :text="device.running ? '运行中' : '已停止'"
+                />
               </td>
               <td>
-                <StatusBadge :status="device.online ? 'online' : 'offline'" :text="device.online ? '上报在线' : '上报离线'" />
+                <StatusBadge
+                  :status="device.running && device.telemetryEnabled ? 'success' : 'info'"
+                  :text="device.running ? (device.telemetryEnabled ? '发送中' : '已关闭') : '未运行'"
+                />
+              </td>
+              <td>
+                <StatusBadge
+                  :status="device.running ? 'online' : 'offline'"
+                  :text="device.running ? (device.online ? '发送在线心跳' : '发送离线心跳') : '已停止'"
+                />
               </td>
               <td>
                 <StatusBadge
@@ -119,7 +190,7 @@
               </td>
               <td>{{ device.currentLightIntensity }} lx</td>
               <td>{{ device.lampStatus.toUpperCase() }}</td>
-              <td>{{ device.telemetryIntervalSeconds }}s / {{ device.statusEvery }}轮</td>
+              <td>{{ device.telemetryIntervalSeconds }}s / 每 {{ device.statusEvery }} 轮发心跳</td>
               <td>{{ device.publishCount }}</td>
               <td>
                 <div class="table-cell-stack">
@@ -141,6 +212,20 @@
                     class="ghost-button"
                     type="button"
                     :disabled="pendingDeviceId === device.deviceId"
+                    @click="toggleTelemetry(device)"
+                  >
+                    {{
+                      pendingDeviceId === device.deviceId
+                        ? "处理中..."
+                        : device.telemetryEnabled
+                          ? "停数据"
+                          : "开数据"
+                    }}
+                  </button>
+                  <button
+                    class="ghost-button"
+                    type="button"
+                    :disabled="pendingDeviceId === device.deviceId"
                     @click="openEditModal(device)"
                   >
                     编辑
@@ -157,14 +242,14 @@
               </td>
             </tr>
             <tr v-if="!devices.length">
-              <td colspan="12" class="table-empty">当前没有可管理的模拟设备</td>
+              <td colspan="13" class="table-empty">当前没有可管理的模拟传感器</td>
             </tr>
           </tbody>
         </table>
       </div>
     </PanelCard>
 
-    <PanelCard title="运行日志" subtitle="显示模拟器连接、发送、命令接收等日志">
+    <PanelCard title="运行日志" subtitle="显示模拟器连接、心跳、数据发送和命令接收日志">
       <div class="button-row simulator-actions-row simulator-toolbar">
         <label class="simulator-filter">
           <span>级别筛选</span>
@@ -181,7 +266,7 @@
         <button class="ghost-button" type="button" :disabled="clearingLogs" @click="handleClearLogs">
           {{ clearingLogs ? "清空中..." : "清空日志" }}
         </button>
-        <span class="inline-note">自动每 5 秒刷新一次。</span>
+        <span class="inline-note">日志和状态每 5 秒自动刷新一次。</span>
       </div>
 
       <div class="simulator-log-list scroll-log-panel">
@@ -203,7 +288,7 @@
       <section class="simulator-modal">
         <header class="section-header">
           <div>
-            <p class="section-kicker">Device Edit</p>
+            <p class="section-kicker">Sensor Edit</p>
             <h3>编辑 {{ editingDevice.deviceCode }}</h3>
           </div>
           <button class="ghost-button" type="button" @click="closeEditModal">关闭</button>
@@ -211,7 +296,7 @@
 
         <div class="form-grid">
           <label>
-            <span>设备名称</span>
+            <span>传感器名称</span>
             <input v-model="editForm.deviceName" type="text" />
           </label>
           <label>
@@ -231,7 +316,7 @@
             <input v-model.number="editForm.voltageBase" type="number" step="0.1" />
           </label>
           <label>
-            <span>遥测间隔（秒）</span>
+            <span>数据发送间隔（秒）</span>
             <input v-model.number="editForm.telemetryIntervalSeconds" type="number" min="1" />
           </label>
           <label>
@@ -239,8 +324,12 @@
             <input v-model.number="editForm.statusEvery" type="number" min="1" />
           </label>
           <label class="checkbox-field">
+            <input v-model="editForm.telemetryEnabled" type="checkbox" />
+            <span>启用数据发送（关闭后仅保留心跳）</span>
+          </label>
+          <label class="checkbox-field">
             <input v-model="editForm.online" type="checkbox" />
-            <span>模拟上报 online=true</span>
+            <span>心跳上报 online=true</span>
           </label>
           <label class="checkbox-field">
             <input v-model="editForm.running" type="checkbox" />
@@ -309,6 +398,7 @@ const editForm = reactive({
   baseLight: 120,
   variance: 35,
   voltageBase: 220.5,
+  telemetryEnabled: true,
   telemetryIntervalSeconds: 5,
   statusEvery: 1,
   online: true,
@@ -328,16 +418,16 @@ const editingDevice = ref<SimulatorDevice | null>(null);
 let autoRefreshTimer: number | undefined;
 
 const summaryStats = computed<DashboardStat[]>(() => [
-  { label: "模拟设备数", value: String(devices.value.length), helper: "当前纳入控制台的设备" },
+  { label: "模拟传感器数", value: String(devices.value.length), helper: "当前纳入控制台的传感器" },
   {
-    label: "运行中设备",
+    label: "运行中",
     value: String(devices.value.filter((item) => item.running).length),
-    helper: "正在持续发送 telemetry/status",
+    helper: "会继续发送心跳",
   },
   {
-    label: "Broker 连接",
-    value: config.connected ? "已连接" : "未连接",
-    helper: `${config.host || "--"}:${config.port || 0}`,
+    label: "仅心跳",
+    value: String(devices.value.filter((item) => item.running && !item.telemetryEnabled).length),
+    helper: "停止数据发送但保留心跳",
   },
   {
     label: "当前日志数",
@@ -345,6 +435,39 @@ const summaryStats = computed<DashboardStat[]>(() => [
     helper: logLevelFilter.value ? `${logLevelFilter.value} 级别日志` : "最近 120 条运行日志",
   },
 ]);
+
+const activeDevice = computed<SimulatorDevice | null>(() => {
+  if (!devices.value.length) {
+    return null;
+  }
+  if (pendingDeviceId.value !== null) {
+    return devices.value.find((item) => item.deviceId === pendingDeviceId.value) ?? devices.value[0];
+  }
+  if (editingDevice.value) {
+    return devices.value.find((item) => item.deviceId === editingDevice.value?.deviceId) ?? devices.value[0];
+  }
+  return devices.value[0];
+});
+
+const heartbeatStateText = computed(() => {
+  if (!activeDevice.value) {
+    return "--";
+  }
+  if (!activeDevice.value.running) {
+    return "未运行";
+  }
+  return activeDevice.value.online ? "持续发送在线心跳" : "持续发送离线心跳";
+});
+
+const telemetryStateText = computed(() => {
+  if (!activeDevice.value) {
+    return "--";
+  }
+  if (!activeDevice.value.running) {
+    return "未运行";
+  }
+  return activeDevice.value.telemetryEnabled ? "按间隔发送业务数据" : "已关闭，仅保留心跳";
+});
 
 function syncConfigForm() {
   configForm.enabled = config.enabled;
@@ -360,10 +483,26 @@ function fillEditForm(device: SimulatorDevice) {
   editForm.baseLight = device.baseLight;
   editForm.variance = device.variance;
   editForm.voltageBase = device.voltageBase;
+  editForm.telemetryEnabled = device.telemetryEnabled;
   editForm.telemetryIntervalSeconds = device.telemetryIntervalSeconds;
   editForm.statusEvery = device.statusEvery;
   editForm.online = device.online;
   editForm.running = device.running;
+}
+
+function buildUpdatePayload(device: SimulatorDevice, overrides?: Partial<typeof editForm>) {
+  return {
+    deviceName: overrides?.deviceName ?? device.deviceName,
+    location: overrides?.location ?? device.location,
+    baseLight: overrides?.baseLight ?? device.baseLight,
+    variance: overrides?.variance ?? device.variance,
+    voltageBase: overrides?.voltageBase ?? device.voltageBase,
+    telemetryEnabled: overrides?.telemetryEnabled ?? device.telemetryEnabled,
+    telemetryIntervalSeconds: overrides?.telemetryIntervalSeconds ?? device.telemetryIntervalSeconds,
+    statusEvery: overrides?.statusEvery ?? device.statusEvery,
+    online: overrides?.online ?? device.online,
+    running: overrides?.running ?? device.running,
+  };
 }
 
 async function loadLogs() {
@@ -378,11 +517,7 @@ async function loadLogs() {
 async function loadConsoleData() {
   refreshing.value = true;
   try {
-    const [nextConfig, nextDevices] = await Promise.all([
-      getSimulatorConfig(),
-      getSimulatorDevices(),
-    ]);
-
+    const [nextConfig, nextDevices] = await Promise.all([getSimulatorConfig(), getSimulatorDevices()]);
     Object.assign(config, nextConfig);
     syncConfigForm();
     devices.value = nextDevices;
@@ -434,6 +569,7 @@ async function handleSaveEdit() {
       baseLight: Number(editForm.baseLight),
       variance: Number(editForm.variance),
       voltageBase: Number(editForm.voltageBase),
+      telemetryEnabled: editForm.telemetryEnabled,
       telemetryIntervalSeconds: Number(editForm.telemetryIntervalSeconds),
       statusEvery: Number(editForm.statusEvery),
       online: editForm.online,
@@ -442,7 +578,7 @@ async function handleSaveEdit() {
     closeEditModal();
     await loadConsoleData();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "保存设备参数失败");
+    window.alert(error instanceof Error ? error.message : "保存传感器参数失败");
   } finally {
     savingEdit.value = false;
   }
@@ -458,14 +594,29 @@ async function toggleDevice(device: SimulatorDevice) {
     }
     await loadConsoleData();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "切换设备运行状态失败");
+    window.alert(error instanceof Error ? error.message : "切换传感器运行状态失败");
+  } finally {
+    pendingDeviceId.value = null;
+  }
+}
+
+async function toggleTelemetry(device: SimulatorDevice) {
+  pendingDeviceId.value = device.deviceId;
+  try {
+    await updateSimulatorDevice(
+      device.deviceId,
+      buildUpdatePayload(device, { telemetryEnabled: !device.telemetryEnabled }),
+    );
+    await loadConsoleData();
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "切换数据发送状态失败");
   } finally {
     pendingDeviceId.value = null;
   }
 }
 
 async function handleDeleteDevice(device: SimulatorDevice) {
-  if (!window.confirm(`确认删除设备 ${device.deviceCode} 吗？这会同步删除数据库中的设备记录。`)) {
+  if (!window.confirm(`确认删除传感器 ${device.deviceCode} 吗？这会同步删除数据库中的记录。`)) {
     return;
   }
 
@@ -477,7 +628,7 @@ async function handleDeleteDevice(device: SimulatorDevice) {
     }
     await loadConsoleData();
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : "删除设备失败");
+    window.alert(error instanceof Error ? error.message : "删除传感器失败");
   } finally {
     pendingDeviceId.value = null;
   }

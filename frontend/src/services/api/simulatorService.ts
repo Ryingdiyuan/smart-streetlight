@@ -28,6 +28,7 @@ interface SimulatorDevicePayload {
   base_light: number;
   variance: number;
   voltage_base: number;
+  telemetry_enabled: boolean;
   telemetry_interval_seconds: number;
   status_every: number;
   publish_count: number;
@@ -59,6 +60,7 @@ export interface SimulatorDeviceInput {
   baseLight: number;
   variance: number;
   voltageBase: number;
+  telemetryEnabled: boolean;
   telemetryIntervalSeconds: number;
   statusEvery: number;
   online: boolean;
@@ -71,6 +73,7 @@ export interface SimulatorDeviceUpdateInput {
   baseLight: number;
   variance: number;
   voltageBase: number;
+  telemetryEnabled: boolean;
   telemetryIntervalSeconds: number;
   statusEvery: number;
   online: boolean;
@@ -107,6 +110,7 @@ function mapDevice(payload: SimulatorDevicePayload): SimulatorDevice {
     baseLight: payload.base_light,
     variance: payload.variance,
     voltageBase: payload.voltage_base,
+    telemetryEnabled: payload.telemetry_enabled,
     telemetryIntervalSeconds: payload.telemetry_interval_seconds,
     statusEvery: payload.status_every,
     publishCount: payload.publish_count,
@@ -154,6 +158,7 @@ export async function createSimulatorDevice(
     base_light: input.baseLight,
     variance: input.variance,
     voltage_base: input.voltageBase,
+    telemetry_enabled: input.telemetryEnabled,
     telemetry_interval_seconds: input.telemetryIntervalSeconds,
     status_every: input.statusEvery,
     online: input.online,
@@ -186,6 +191,7 @@ export async function updateSimulatorDevice(
     base_light: input.baseLight,
     variance: input.variance,
     voltage_base: input.voltageBase,
+    telemetry_enabled: input.telemetryEnabled,
     telemetry_interval_seconds: input.telemetryIntervalSeconds,
     status_every: input.statusEvery,
     online: input.online,

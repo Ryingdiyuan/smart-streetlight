@@ -66,6 +66,8 @@ def ensure_schema_updates() -> None:
             alter_statements.append("ADD COLUMN variance INT NOT NULL DEFAULT 35")
         if "voltage_base" not in sensor_columns:
             alter_statements.append("ADD COLUMN voltage_base FLOAT NOT NULL DEFAULT 220.5")
+        if "telemetry_enabled" not in sensor_columns:
+            alter_statements.append("ADD COLUMN telemetry_enabled BOOLEAN NOT NULL DEFAULT TRUE")
         if "telemetry_interval_seconds" not in sensor_columns:
             alter_statements.append("ADD COLUMN telemetry_interval_seconds INT NOT NULL DEFAULT 5")
         if "status_every" not in sensor_columns:
