@@ -180,6 +180,7 @@ export interface SimulatorDevice {
   baseLight: number;
   variance: number;
   voltageBase: number;
+  telemetryEnabled: boolean;
   telemetryIntervalSeconds: number;
   statusEvery: number;
   publishCount: number;

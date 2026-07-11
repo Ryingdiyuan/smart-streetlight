@@ -43,6 +43,7 @@ def serialize_sensor(db: Session, sensor: Sensor) -> dict:
         "base_light": sensor.base_light,
         "variance": sensor.variance,
         "voltage_base": sensor.voltage_base,
+        "telemetry_enabled": sensor.telemetry_enabled,
         "telemetry_interval_seconds": sensor.telemetry_interval_seconds,
         "status_every": sensor.status_every,
         "last_heartbeat_at": sensor.last_heartbeat_at,

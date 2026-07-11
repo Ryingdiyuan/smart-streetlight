@@ -90,6 +90,10 @@
             <span>遥测间隔（秒）</span>
             <input v-model.number="createForm.telemetryIntervalSeconds" type="number" min="1" />
           </label>
+          <label class="checkbox-field">
+            <input v-model="createForm.telemetryEnabled" type="checkbox" />
+            <span>启用数据发送（关闭后仅保留心跳）</span>
+          </label>
           <label>
             <span>心跳轮次</span>
             <input v-model.number="createForm.statusEvery" type="number" min="1" />
@@ -113,7 +117,50 @@
       </PanelCard>
     </div>
 
-    <PanelCard title="传感器模拟列表" subtitle="未绑定传感器的数据不会驱动路灯；绑定后由传感器控制路灯开关">
+    <PanelCard title="发送架构" subtitle="前端直接展示心跳类与数据类已拆分管理">
+      <div class="detail-tip-grid">
+        <div class="summary-box">
+          <span>当前查看传感器</span>
+          <strong>{{ activeSensor ? activeSensor.sensorCode : "--" }}</strong>
+        </div>
+        <div class="summary-box">
+          <span>运行状态</span>
+          <strong>{{ activeSensor ? (activeSensor.running ? "运行中" : "已停止") : "--" }}</strong>
+        </div>
+      </div>
+
+      <div class="content-grid two-columns">
+        <div class="summary-box">
+          <span>HeartbeatPublisher</span>
+          <strong>只负责 status / 心跳存在性证明</strong>
+          <div class="table-cell-stack">
+            <span>发送内容：online、lampStatus、timestamp</span>
+            <span class="inline-note">当前状态：{{ heartbeatStateText }}</span>
+            <span class="inline-note">调度方式：每 {{ activeSensor?.statusEvery ?? "--" }} 轮发送一次心跳</span>
+            <span class="inline-note">最近心跳：{{ activeSensor?.lastStatusAt || "--" }}</span>
+          </div>
+        </div>
+
+        <div class="summary-box">
+          <span>TelemetryPublisher</span>
+          <strong>只负责 telemetry / 光照电压等业务数据</strong>
+          <div class="table-cell-stack">
+            <span>发送内容：lightIntensity、lampStatus、voltage、timestamp</span>
+            <span class="inline-note">当前状态：{{ telemetryStateText }}</span>
+            <span class="inline-note">调度方式：每 {{ activeSensor?.telemetryIntervalSeconds ?? "--" }} 秒尝试发送一次数据</span>
+            <span class="inline-note">最近数据：{{ activeSensor?.lastTelemetryAt || "--" }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-row simulator-actions-row">
+        <span class="inline-note">
+          页面上的“停数据/开数据”只作用于 TelemetryPublisher；HeartbeatPublisher 仍持续发送心跳，用于确认传感器仍然存在。
+        </span>
+      </div>
+    </PanelCard>
+
+    <PanelCard title="传感器模拟列表" subtitle="运行状态控制整个模拟器；数据发送可单独关闭；心跳仍会按轮次继续发送。">
       <div v-if="refreshing && !sensors.length" class="placeholder-box">正在加载模拟器传感器...</div>
       <div v-else class="table-wrapper">
         <table>
@@ -125,7 +172,8 @@
               <th>绑定路灯</th>
               <th>控制模式</th>
               <th>运行状态</th>
-              <th>模拟上报状态</th>
+              <th>数据发送</th>
+              <th>心跳发送</th>
               <th>当前光照</th>
               <th>灯状态</th>
               <th>间隔</th>
@@ -150,11 +198,20 @@
                 <StatusBadge :status="sensor.running ? 'success' : 'info'" :text="sensor.running ? '运行中' : '已停止'" />
               </td>
               <td>
-                <StatusBadge :status="sensor.online ? 'online' : 'offline'" :text="sensor.online ? '上报在线' : '上报离线'" />
+                <StatusBadge
+                  :status="sensor.running && sensor.telemetryEnabled ? 'success' : 'info'"
+                  :text="sensor.running ? (sensor.telemetryEnabled ? '发送中' : '已关闭') : '未运行'"
+                />
+              </td>
+              <td>
+                <StatusBadge
+                  :status="sensor.running ? 'online' : 'offline'"
+                  :text="sensor.running ? (sensor.online ? '发送在线心跳' : '发送离线心跳') : '已停止'"
+                />
               </td>
               <td>{{ sensor.currentLightIntensity }} lx</td>
               <td>{{ sensor.lampStatus.toUpperCase() }}</td>
-              <td>{{ sensor.telemetryIntervalSeconds }}s / {{ sensor.statusEvery }}轮</td>
+              <td>{{ sensor.telemetryIntervalSeconds }}s / 每 {{ sensor.statusEvery }} 轮</td>
               <td>{{ sensor.publishCount }}</td>
               <td>
                 <div class="table-cell-stack">
@@ -171,6 +228,20 @@
                     @click="toggleSensor(sensor)"
                   >
                     {{ pendingSensorId === sensor.sensorId ? "处理中..." : sensor.running ? "停止" : "启动" }}
+                  </button>
+                  <button
+                    class="ghost-button"
+                    type="button"
+                    :disabled="pendingSensorId === sensor.sensorId"
+                    @click="toggleTelemetry(sensor)"
+                  >
+                    {{
+                      pendingSensorId === sensor.sensorId
+                        ? "处理中..."
+                        : sensor.telemetryEnabled
+                          ? "停数据"
+                          : "开数据"
+                    }}
                   </button>
                   <button
                     class="ghost-button"
@@ -199,7 +270,7 @@
       </div>
     </PanelCard>
 
-    <PanelCard title="运行日志" subtitle="显示模拟器连接、发送、命令接收等日志">
+    <PanelCard title="运行日志" subtitle="显示模拟器连接、心跳、数据发送和命令接收等日志">
       <div class="button-row simulator-actions-row simulator-toolbar">
         <label class="simulator-filter">
           <span>级别筛选</span>
@@ -268,6 +339,10 @@
           <label>
             <span>遥测间隔（秒）</span>
             <input v-model.number="editForm.telemetryIntervalSeconds" type="number" min="1" />
+          </label>
+          <label class="checkbox-field">
+            <input v-model="editForm.telemetryEnabled" type="checkbox" />
+            <span>启用数据发送（关闭后仅保留心跳）</span>
           </label>
           <label>
             <span>心跳轮次</span>
@@ -346,6 +421,7 @@ const createForm = reactive({
   baseLight: 120,
   variance: 35,
   voltageBase: 220.5,
+  telemetryEnabled: true,
   telemetryIntervalSeconds: 5,
   statusEvery: 1,
   online: true,
@@ -358,6 +434,7 @@ const editForm = reactive({
   baseLight: 120,
   variance: 35,
   voltageBase: 220.5,
+  telemetryEnabled: true,
   telemetryIntervalSeconds: 5,
   statusEvery: 1,
   online: true,
@@ -383,7 +460,12 @@ const summaryStats = computed<DashboardStat[]>(() => [
   {
     label: "运行中传感器",
     value: String(sensors.value.filter((item) => item.running).length),
-    helper: "正在持续发送 telemetry/status",
+    helper: "正在持续发送心跳",
+  },
+  {
+    label: "仅心跳",
+    value: String(sensors.value.filter((item) => item.running && !item.telemetryEnabled).length),
+    helper: "停止数据发送但保留心跳",
   },
   {
     label: "已绑定路灯",
@@ -396,6 +478,39 @@ const summaryStats = computed<DashboardStat[]>(() => [
     helper: `${config.host || "--"}:${config.port || 0}`,
   },
 ]);
+
+const activeSensor = computed<SimulatorSensor | null>(() => {
+  if (!sensors.value.length) {
+    return null;
+  }
+  if (pendingSensorId.value !== null) {
+    return sensors.value.find((item) => item.sensorId === pendingSensorId.value) ?? sensors.value[0];
+  }
+  if (editingSensor.value) {
+    return sensors.value.find((item) => item.sensorId === editingSensor.value?.sensorId) ?? sensors.value[0];
+  }
+  return sensors.value[0];
+});
+
+const heartbeatStateText = computed(() => {
+  if (!activeSensor.value) {
+    return "--";
+  }
+  if (!activeSensor.value.running) {
+    return "未运行";
+  }
+  return activeSensor.value.online ? "持续发送在线心跳" : "持续发送离线心跳";
+});
+
+const telemetryStateText = computed(() => {
+  if (!activeSensor.value) {
+    return "--";
+  }
+  if (!activeSensor.value.running) {
+    return "未运行";
+  }
+  return activeSensor.value.telemetryEnabled ? "按间隔发送业务数据" : "已关闭，仅保留心跳";
+});
 
 function syncConfigForm() {
   configForm.enabled = config.enabled;
@@ -412,6 +527,7 @@ function resetCreateForm() {
   createForm.baseLight = 120;
   createForm.variance = 35;
   createForm.voltageBase = 220.5;
+  createForm.telemetryEnabled = true;
   createForm.telemetryIntervalSeconds = 5;
   createForm.statusEvery = 1;
   createForm.online = true;
@@ -424,10 +540,26 @@ function fillEditForm(sensor: SimulatorSensor) {
   editForm.baseLight = sensor.baseLight;
   editForm.variance = sensor.variance;
   editForm.voltageBase = sensor.voltageBase;
+  editForm.telemetryEnabled = sensor.telemetryEnabled;
   editForm.telemetryIntervalSeconds = sensor.telemetryIntervalSeconds;
   editForm.statusEvery = sensor.statusEvery;
   editForm.online = sensor.online;
   editForm.running = sensor.running;
+}
+
+function buildUpdatePayload(sensor: SimulatorSensor, overrides?: Partial<typeof editForm>) {
+  return {
+    sensorName: overrides?.sensorName ?? sensor.sensorName,
+    location: overrides?.location ?? sensor.location,
+    baseLight: overrides?.baseLight ?? sensor.baseLight,
+    variance: overrides?.variance ?? sensor.variance,
+    voltageBase: overrides?.voltageBase ?? sensor.voltageBase,
+    telemetryEnabled: overrides?.telemetryEnabled ?? sensor.telemetryEnabled,
+    telemetryIntervalSeconds: overrides?.telemetryIntervalSeconds ?? sensor.telemetryIntervalSeconds,
+    statusEvery: overrides?.statusEvery ?? sensor.statusEvery,
+    online: overrides?.online ?? sensor.online,
+    running: overrides?.running ?? sensor.running,
+  };
 }
 
 async function loadLogs() {
@@ -488,6 +620,7 @@ async function handleCreateSensor() {
       baseLight: Number(createForm.baseLight),
       variance: Number(createForm.variance),
       voltageBase: Number(createForm.voltageBase),
+      telemetryEnabled: createForm.telemetryEnabled,
       telemetryIntervalSeconds: Number(createForm.telemetryIntervalSeconds),
       statusEvery: Number(createForm.statusEvery),
       online: createForm.online,
@@ -525,6 +658,7 @@ async function handleSaveEdit() {
       baseLight: Number(editForm.baseLight),
       variance: Number(editForm.variance),
       voltageBase: Number(editForm.voltageBase),
+      telemetryEnabled: editForm.telemetryEnabled,
       telemetryIntervalSeconds: Number(editForm.telemetryIntervalSeconds),
       statusEvery: Number(editForm.statusEvery),
       online: editForm.online,
@@ -550,6 +684,21 @@ async function toggleSensor(sensor: SimulatorSensor) {
     await loadConsoleData();
   } catch (error) {
     window.alert(error instanceof Error ? error.message : "切换传感器运行状态失败");
+  } finally {
+    pendingSensorId.value = null;
+  }
+}
+
+async function toggleTelemetry(sensor: SimulatorSensor) {
+  pendingSensorId.value = sensor.sensorId;
+  try {
+    await updateSimulatorSensor(
+      sensor.sensorId,
+      buildUpdatePayload(sensor, { telemetryEnabled: !sensor.telemetryEnabled }),
+    );
+    await loadConsoleData();
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "切换数据发送状态失败");
   } finally {
     pendingSensorId.value = null;
   }

@@ -236,6 +236,29 @@ function applyBatchLampStatus(command: Extract<CommandType, "TURN_ON" | "TURN_OF
   devices.value = devices.value.map((device) => (successIds.has(device.id) ? { ...device, lampStatus: nextStatus } : device));
 }
 
+function buildBatchFeedbackMessage(
+  command: Extract<CommandType, "TURN_ON" | "TURN_OFF">,
+  summary: BatchCommandSummary,
+) {
+  const actionText = command === "TURN_ON" ? "批量开灯" : "批量关灯";
+  const failedDevices = summary.results.filter((item) => item.result === "failed").map((item) => item.deviceCode);
+  const skippedDevices = summary.results.filter((item) => item.result === "skipped").map((item) => item.deviceCode);
+
+  const lines = [
+    `${actionText}结果：`,
+    `共 ${summary.total} 盏，成功 ${summary.successCount} 盏，失败 ${summary.failedCount} 盏，跳过 ${summary.skippedCount} 盏。`,
+  ];
+
+  if (failedDevices.length) {
+    lines.push(`失败设备：${failedDevices.join("、")}`);
+  }
+  if (skippedDevices.length) {
+    lines.push(`跳过设备：${skippedDevices.join("、")}`);
+  }
+
+  return lines.join("\n");
+}
+
 async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TURN_OFF">) {
   if (!selectedCount.value || batchSubmitting.value || !canOperateDevices.value) {
     return;
@@ -249,11 +272,13 @@ async function handleBatchCommand(command: Extract<CommandType, "TURN_ON" | "TUR
     applyBatchLampStatus(command, summary);
     selectedDeviceIds.value = [];
     batchMessageTone.value = summary.failedCount > 0 ? "error" : "success";
-    batchMessage.value = `已下发${command === "TURN_ON" ? "批量开灯" : "批量关灯"}指令，共 ${summary.total} 盏，成功 ${summary.successCount} 盏，失败 ${summary.failedCount} 盏，跳过 ${summary.skippedCount} 盏。`;
+    batchMessage.value = buildBatchFeedbackMessage(command, summary).replace(/\n/g, " ");
+    window.alert(buildBatchFeedbackMessage(command, summary));
     void loadDevices({ silent: true });
   } catch (error) {
     batchMessageTone.value = "error";
     batchMessage.value = `批量操作失败：${getErrorMessage(error)}`;
+    window.alert(`批量操作失败：${getErrorMessage(error)}`);
   } finally {
     batchSubmitting.value = false;
   }

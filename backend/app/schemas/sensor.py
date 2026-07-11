@@ -17,6 +17,7 @@ class SensorCreate(SensorBase):
     base_light: int = 120
     variance: int = 35
     voltage_base: float = 220.5
+    telemetry_enabled: bool = True
     telemetry_interval_seconds: int = 5
     status_every: int = 1
 
@@ -32,6 +33,7 @@ class SensorUpdate(BaseModel):
     base_light: int | None = None
     variance: int | None = None
     voltage_base: float | None = None
+    telemetry_enabled: bool | None = None
     telemetry_interval_seconds: int | None = None
     status_every: int | None = None
 
@@ -42,6 +44,7 @@ class SensorRead(SensorBase):
     base_light: int
     variance: int
     voltage_base: float
+    telemetry_enabled: bool
     telemetry_interval_seconds: int
     status_every: int
     last_heartbeat_at: datetime | None = None

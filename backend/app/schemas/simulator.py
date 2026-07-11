@@ -24,6 +24,7 @@ class SimulatorSensorCreate(BaseModel):
     base_light: int = 120
     variance: int = 35
     voltage_base: float = 220.5
+    telemetry_enabled: bool = True
     telemetry_interval_seconds: int = 5
     status_every: int = 1
     online: bool = True
@@ -39,6 +40,7 @@ class SimulatorSensorUpdate(BaseModel):
     base_light: int | None = None
     variance: int | None = None
     voltage_base: float | None = None
+    telemetry_enabled: bool | None = None
     telemetry_interval_seconds: int | None = None
     status_every: int | None = None
     online: bool | None = None
@@ -58,6 +60,7 @@ class SimulatorSensorRead(BaseModel):
     base_light: int
     variance: int
     voltage_base: float
+    telemetry_enabled: bool
     telemetry_interval_seconds: int
     status_every: int
     publish_count: int
