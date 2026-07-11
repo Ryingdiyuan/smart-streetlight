@@ -5,12 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_admin, require_user_or_above
-from app.models.device import Device
-from app.models.sensor import Sensor
-from app.models.light_data import LightData
-from app.models.threshold_config import ThresholdConfig
-from app.models.control_log import ControlLog
 from app.models.alarm_log import AlarmLog
+from app.models.control_log import ControlLog
+from app.models.device import Device
+from app.models.light_data import LightData
+from app.models.sensor import Sensor
+from app.models.threshold_config import ThresholdConfig
 from app.schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def get_device_or_404(db: Session, device_id: int) -> Device:
     device = db.get(Device, device_id)
-    if device is None:
+    if device is None or device.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="设备不存在",
@@ -32,7 +32,10 @@ def ensure_device_code_unique(
     device_code: str,
     exclude_id: int | None = None,
 ) -> None:
-    query = db.query(Device).filter(Device.device_code == device_code)
+    query = db.query(Device).filter(
+        Device.device_code == device_code,
+        Device.deleted_at.is_(None),
+    )
     if exclude_id is not None:
         query = query.filter(Device.id != exclude_id)
 
@@ -45,7 +48,7 @@ def ensure_device_code_unique(
 
 def ensure_sensor_bindable(db: Session, sensor_id: int, device_id: int | None = None) -> Sensor:
     sensor = db.get(Sensor, sensor_id)
-    if sensor is None:
+    if sensor is None or sensor.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="绑定的传感器不存在")
 
     if not sensor.online or str(sensor.status).lower() != "online":
@@ -54,7 +57,10 @@ def ensure_sensor_bindable(db: Session, sensor_id: int, device_id: int | None = 
             detail="传感器当前离线，无法绑定到新路灯，请先恢复在线状态",
         )
 
-    bound_query = db.query(Device).filter(Device.sensor_id == sensor_id)
+    bound_query = db.query(Device).filter(
+        Device.sensor_id == sensor_id,
+        Device.deleted_at.is_(None),
+    )
     if device_id is not None:
         bound_query = bound_query.filter(Device.id != device_id)
     bound_device = bound_query.first()
@@ -96,14 +102,20 @@ def list_devices(
         .filter(
             Device.deleted_at.is_(None),
             Device.device_code.is_not(None),
+            Device.device_code != "",
             Device.device_name.is_not(None),
+            Device.device_name != "",
         )
         .order_by(Device.id.asc())
         .all()
     )
-    invalid_devices = [device.id for device in devices if not device.device_code]
+    invalid_devices = [
+        device.id
+        for device in devices
+        if not device.device_code or not device.device_name
+    ]
     if invalid_devices:
-        logger.warning("Device list contains invalid device_code rows: %s", invalid_devices)
+        logger.warning("Device list contains invalid rows: %s", invalid_devices)
     return [serialize_device(db, device) for device in devices]
 
 

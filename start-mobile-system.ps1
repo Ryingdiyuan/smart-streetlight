@@ -52,7 +52,9 @@ function Start-InNewWindow {
 $rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendDir = Join-Path $rootDir "backend"
 $mobileDir = Join-Path $rootDir "mobile-frontend"
-$backendPython = Join-Path $backendDir ".venv\Scripts\python.exe"
+$condaPython = Join-Path $backendDir ".conda\python.exe"
+$venvPython = Join-Path $backendDir ".venv\Scripts\python.exe"
+$backendPython = if (Test-Path -LiteralPath $condaPython) { $condaPython } else { $venvPython }
 
 if (-not (Test-Path -LiteralPath $backendDir)) {
   throw "Missing backend directory: $backendDir"
@@ -63,7 +65,7 @@ if (-not (Test-Path -LiteralPath $mobileDir)) {
 }
 
 if (-not (Test-Path -LiteralPath $backendPython)) {
-  throw "Missing backend venv python: $backendPython"
+  throw "Missing backend Python. Expected either $condaPython or $venvPython"
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $mobileDir "package.json"))) {

@@ -17,6 +17,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 def init_db() -> None:
     from app.models import (  # noqa: F401
         alarm_log,
+        chat_message,
         control_log,
         device,
         light_data,

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -22,3 +23,20 @@ class AgentChatResponse(BaseModel):
     source: str
     related_device: AgentRelatedDevice | None = None
     context_summary: dict[str, Any]
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    user_id: int
+    role: str
+    content: str
+    device_id: int | None = None
+    device_code: str | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessageResponse]
+    total: int
